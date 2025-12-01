@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hyperflux 3D Cellular Automata</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue",
+        Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 0%, #0f2027 0%, #203a43 50%, #2c5364 100%);
+      color: #eef8ff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      margin: 0 0 8px;
+      text-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    .subtitle {
+      opacity: 0.9;
+      font-size: 14px;
+      margin-bottom: 16px;
+      text-align: center;
+      max-width: 900px;
+    }
+    #canvas {
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      cursor: crosshair;
+      background: #0a0f12;
+    }
+    .controls {
+      margin-top: 16px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+    button {
+      padding: 10px 18px;
+      font-size: 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #e6f4ff;
+      color: #0a376b;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+    button:hover { transform: translateY(-1px); }
+    button.active { background: #3ecf8e; color: #073d2d; }
+    .slider-group,
+    .select-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .slider-group label { font-size: 12px; }
+    input[type="range"] { width: 140px; }
+    select { padding: 6px 8px; border-radius: 6px; border: none; }
+    .panel {
+      margin-top: 16px;
+      width: min(1000px, 100%);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .panel h3 { margin: 0 0 10px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .stats { margin-top: 10px; font-size: 13px; opacity: 0.9; }
+    .legend { font-size: 12px; opacity: 0.9; }
+    textarea.settings-text {
+      width: 100%;
+      min-height: 140px;
+      background: rgba(0,0,0,0.35);
+      color: #e6f4ff;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: monospace;
+      font-size: 12px;
+      resize: vertical;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .settings-actions { display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
+    .settings-actions button { flex: 0 0 auto; }
+    .settings-error { color:#ffb3b3; font-size:12px; min-height:14px; margin-top:4px; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Hyperflux 3D Cellular Automata</h1>
+  <div class="subtitle">
+    Unpublished rule-set: a 3D energy lattice with anisotropic diffusion, temporal echo coupling,
+    parity-driven vortex spin, plane resonance, and portal wrap. Paint voxels and watch wavefronts
+    interfere across depth.
+  </div>
+
+  <canvas id="canvas" width="960" height="640"></canvas>
+  <canvas id="glcanvas" width="960" height="640" style="display:none; position:absolute; top:0; left:0; pointer-events:auto; border:2px solid rgba(255,255,255,0.4);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);"></canvas>
+
+  <div class="controls">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+    <button id="stepBtn">Step</button>
+    <button id="clearBtn">Clear</button>
+    <button id="randomBtn">Random</button>
+    <div class="slider-group">
+      <label for="speedSlider">Speed: <span id="speedValue">10</span>/s</label>
+      <input type="range" id="speedSlider" min="1" max="60" value="10" />
+    </div>
+    <div class="slider-group">
+      <label for="voxelSizeSlider">Voxel Size: <span id="voxelSizeValue">14</span></label>
+      <input type="range" id="voxelSizeSlider" min="8" max="22" value="14" />
+    </div>
+    <div class="select-group">
+      <label for="renderMode">Render:</label>
+      <select id="renderMode">
+        <option value="iso">Isometric</option>
+        <option value="slice">Z-Slice</option>
+        <option value="depth">Depth Fog</option>
+        <option value="webgl3d">3D (WebGL)</option>
+      </select>
+    </div>
+    <!-- New transparency control -->
+    <div class="select-group">
+      <label for="transparentSelect">Transparent:</label>
+      <select id="transparentSelect">
+        <option value="none">None</option>
+        <option value="low">Low (&lt;50)</option>
+        <option value="mid">Mid (50-119)</option>
+        <option value="high">High (120-199)</option>
+        <option value="max">Max (>=200)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>⚙️ Rule Parameters</h3>
+    <div class="grid">
+      <div class="slider-group"><label for="baseDecay">Base Decay <span id="baseDecayValue">0.88</span></label><input type="range" id="baseDecay" min="0.6" max="0.98" step="0.01" value="0.88" /></div>
+      <div class="slider-group"><label for="echoWeight">Echo Weight <span id="echoWeightValue">0.35</span></label><input type="range" id="echoWeight" min="0" max="0.9" step="0.01" value="0.35" /></div>
+      <div class="slider-group"><label for="diffXY">Diffusion XY <span id="diffXYValue">0.20</span></label><input type="range" id="diffXY" min="0" max="0.5" step="0.01" value="0.20" /></div>
+      <div class="slider-group"><label for="diffZ">Diffusion Z <span id="diffZValue">0.12</span></label><input type="range" id="diffZ" min="0" max="0.5" step="0.01" value="0.12" /></div>
+      <div class="slider-group"><label for="resBoost">Resonance Boost <span id="resBoostValue">1.20</span></label><input type="range" id="resBoost" min="1.0" max="1.8" step="0.01" value="1.20" /></div>
+      <div class="slider-group"><label for="spin">Spin Coupling <span id="spinValue">0.15</span></label><input type="range" id="spin" min="0" max="0.4" step="0.01" value="0.15" /></div>
+      <div class="slider-group"><label for="birthTh">Birth Threshold <span id="birthThValue">85</span></label><input type="range" id="birthTh" min="30" max="200" step="1" value="85" /></div>
+      <div class="slider-group"><label for="activeTh">Active Threshold <span id="activeThValue">18</span></label><input type="range" id="activeTh" min="5" max="120" step="1" value="18" /></div>
+      <div class="slider-group"><label for="minEnergy">Min Energy <span id="minEnergyValue">8</span></label><input type="range" id="minEnergy" min="0" max="40" step="1" value="8" /></div>
+    </div>
+    <div class="controls" style="margin-top:10px">
+      <button onclick="loadPreset('default')">Default</button>
+      <button onclick="loadPreset('waves')">Waves</button>
+      <button onclick="loadPreset('vortex')">Vortex</button>
+      <button onclick="loadPreset('chaos')">Chaos</button>
+      <button onclick="randomizeParams()" style="background: linear-gradient(135deg,#61dafb,#3ecf8e); color:#042b36">🎲 Randomize</button>
+    </div>
+    <div class="legend">
+      Colors: deep-blue = low, cyan/yellow = mid, orange/red = high, white = saturated. Depth adds fog in some modes.
+    </div>
+    <div class="stats" id="stats">Gen: 0 | Active Voxels: 0 | Avg Energy: 0 | Size: 32×24×18</div>
+    <h3 style="margin-top:20px">🧩 Settings (JSON)</h3>
+    <p style="font-size:12px; opacity:0.85; margin-top:0;">You can copy, edit, and re-apply simulation settings. Modify params, speed, voxelSize, renderMode, or lattice size (NX, NY, NZ). Editing lattice size resets the grid.</p>
+    <textarea id="settingsText" class="settings-text" spellcheck="false"></textarea>
+    <div class="settings-actions">
+      <button id="applySettingsBtn">Apply JSON</button>
+      <button id="copySettingsBtn">Copy</button>
+      <button id="refreshSettingsBtn">Refresh</button>
+      <button id="randomizeAndShowBtn">Randomize Params + Show</button>
+    </div>
+    <div id="settingsError" class="settings-error"></div>
+  </div>
+
+  <script>
+    // Hyperflux 3D Cellular Automata
+    // Novel rule-set designed by GitHub Copilot, 2025
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const glCanvas = document.getElementById('glcanvas');
+    let gl = null;
+
+    // Simulation lattice dimensions (x,y,z)
+    let NX = 32, NY = 32, NZ = 32;
+    let voxelSize = 14; // for rendering, not sim spacing
+    let renderMode = 'iso';
+    // WebGL camera state
+    let camYaw = 0.6, camPitch = 0.5; // radians
+    let camDist = 75; // distance
+    let isOrbiting = false;
+    let lastMouse = {x:0,y:0};
+
+    // core fields
+    let grid = alloc3D(NX, NY, NZ, 0);
+    let prev = alloc3D(NX, NY, NZ, 0);
+    let echo = alloc3D(NX, NY, NZ, 0);
+
+    // state
+    let isRunning = false;
+    let generation = 0;
+    let speed = 10;
+    let rafId = null;
+    let lastTime = 0;
+
+    // parameters
+    let params = {
+      baseDecay: 0.88,
+      echoWeight: 0.35,
+      diffXY: 0.20,
+      diffZ: 0.12,
+      resBoost: 1.20,
+      spin: 0.15,
+      birthTh: 85,
+      activeTh: 18,
+      minEnergy: 8
+    };
+    // Transparency band selection
+    let transparentBand = 'none';
+
+    function alloc3D(nx, ny, nz, fill) {
+      const A = new Array(nz);
+      for (let z = 0; z < nz; z++) {
+        const plane = new Array(ny);
+        for (let y = 0; y < ny; y++) {
+          const row = new Array(nx);
+          for (let x = 0; x < nx; x++) row[x] = fill;
+          plane[y] = row;
+        }
+        A[z] = plane;
+      }
+      return A;
+    }
+
+    function copy3D(src) {
+      const nz = src.length, ny = src[0].length, nx = src[0][0].length;
+      const A = new Array(nz);
+      for (let z = 0; z < nz; z++) {
+        const plane = new Array(ny);
+        for (let y = 0; y < ny; y++) plane[y] = src[z][y].slice();
+        A[z] = plane;
+      }
+      return A;
+    }
+
+    // Neighborhood helper (Moore in 3D, wrap portals)
+    function neighborsInfo(x, y, z) {
+      let active = 0, total = 0;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0 && dz === 0) continue;
+            const xx = (x + dx + NX) % NX;
+            const yy = (y + dy + NY) % NY;
+            const zz = (z + dz + NZ) % NZ;
+            const e = grid[zz][yy][xx];
+            total += e;
+            if (e > params.activeTh) active++;
+          }
+        }
+      }
+      return { active, total };
+    }
+
+    // Unpublished Hyperflux Rules (3D):
+    // 1) Temporal Echo Coupling: energy blends with echo (t-2) using echoWeight.
+    // 2) Anisotropic Diffusion: stronger in XY than Z.
+    // 3) Parity-Driven Vortex Spin: energy shifts along (dx,dy) based on cell parity and neighbor imbalance.
+    // 4) Plane Resonance: if alignment across Z planes is near, amplify.
+    // 5) Portal Wrap: boundaries wrap; birth requires pattern energy signature and active count bands.
+    function step() {
+      const next = alloc3D(NX, NY, NZ, 0);
+
+      for (let z = 0; z < NZ; z++) {
+        for (let y = 0; y < NY; y++) {
+          for (let x = 0; x < NX; x++) {
+            const E = grid[z][y][x];
+            const Ee = echo[z][y][x];
+            const { active, total } = neighborsInfo(x, y, z);
+
+            // Base mix and decay
+            const mix = (E + Ee * params.echoWeight) / (1 + params.echoWeight);
+            let val = mix * params.baseDecay;
+
+            // Anisotropic diffusion: pull towards average neighbors, different XY/Z weights
+            const avgN = total / 26;
+            const neighborXY = (
+              grid[z][y][(x - 1 + NX) % NX] + grid[z][y][(x + 1) % NX] +
+              grid[z][(y - 1 + NY) % NY][x] + grid[z][(y + 1) % NY][x]
+            ) / 4;
+            const neighborZ = (
+              grid[(z - 1 + NZ) % NZ][y][x] + grid[(z + 1) % NZ][y][x]
+            ) / 2;
+            val += (neighborXY - E) * params.diffXY + (neighborZ - E) * params.diffZ;
+
+            // Parity-driven vortex spin in XY:
+            // Compute local gradient bias and rotate energy around the cell depending on (x+y+z)%2
+            const parity = (x + y + z) & 1;
+            const gx = neighborXY - grid[z][y][(x - 1 + NX) % NX];
+            const gy = neighborXY - grid[z][(y - 1 + NY) % NY][x];
+            // spin direction: parity decides clockwise/counter-clockwise contribution
+            const spinDir = parity ? 1 : -1;
+            val += params.spin * spinDir * (gx - gy);
+
+            // Birth and survival bands using energy signature
+            // Energy signature based on neighbor sum mod segmented window, different bands for birth
+            let birthBoost = 0;
+            const signature = total % 120; // 3D band signature
+            if (E <= params.minEnergy) {
+              // birth if active in [3..6] or [10..12] and signature hits narrow windows
+              if ((active >= 3 && active <= 6 && signature > 50 && signature < 66) ||
+                  (active >= 10 && active <= 12 && signature > 95 && signature < 108)) {
+                birthBoost = params.birthTh + (signature % 20);
+              }
+            } else {
+              // survival amplification in balanced neighborhoods
+              if (active === 4 || active === 5 || active === 7) {
+                val += (avgN - E) * 0.15;
+              }
+            }
+
+            // Plane resonance: if energies across z-1, z, z+1 are aligned within small delta, boost
+            const Ezm = grid[(z - 1 + NZ) % NZ][y][x];
+            const Ezp = grid[(z + 1) % NZ][y][x];
+            if (Math.abs(E - Ezm) < 14 && Math.abs(E - Ezp) < 14 && E > 30) {
+              val *= params.resBoost;
+            }
+
+            // Apply birth boost if triggered
+            if (birthBoost > 0) val = Math.max(val, birthBoost);
+
+            // Clamp and threshold
+            val = Math.max(0, Math.min(255, val));
+            next[z][y][x] = val > params.minEnergy ? val : 0;
+          }
+        }
+      }
+
+      // Temporal memory update (echo = t-2)
+      echo = copy3D(prev);
+      prev = copy3D(grid);
+      grid = next;
+      generation++;
+    }
+
+    // Rendering
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (renderMode === 'iso') {
+        glCanvas.style.display = 'none';
+        canvas.style.display = 'block';
+        drawIsometric();
+      }
+      else if (renderMode === 'slice') {
+        glCanvas.style.display = 'none';
+        canvas.style.display = 'block';
+        drawSlice(Math.floor(NZ / 2));
+      }
+      else if (renderMode === 'depth') {
+        glCanvas.style.display = 'none';
+        canvas.style.display = 'block';
+        drawDepthFog();
+      }
+      else if (renderMode === 'webgl3d') {
+        drawWebGL3D();
+      }
+      updateStats();
+    }
+
+    function energyColor(e, z = 0) {
+      if (e <= 0) return null;
+      if (isTransparent(e)) return null;
+      // Map energy to color; optional z affects fogging in depth mode
+      let r, g, b;
+      if (e < 50) { // deep-blue to cyan
+        const t = e / 50;
+        r = 0; g = Math.floor(120 + t * 120); b = 220;
+      } else if (e < 120) { // cyan to yellow
+        const t = (e - 50) / 70;
+        r = Math.floor(t * 255); g = 255; b = Math.floor(220 - t * 180);
+      } else if (e < 200) { // yellow to red
+        const t = (e - 120) / 80;
+        r = 255; g = Math.floor(255 - t * 255); b = 40;
+      } else { // red to white
+        const t = (e - 200) / 55;
+        r = 255; g = Math.floor(t * 255); b = Math.floor(100 + t * 155);
+      }
+      if (renderMode === 'depth') {
+        const fog = 1 - z / (NZ - 1);
+        r = Math.floor(r * (0.6 + 0.4 * fog));
+        g = Math.floor(g * (0.6 + 0.4 * fog));
+        b = Math.floor(b * (0.6 + 0.4 * fog));
+      }
+      return `rgb(${r},${g},${b})`;
+    }
+    function isTransparent(e){
+      switch(transparentBand){
+        case 'low': return e>0 && e<50;
+        case 'mid': return e>=50 && e<120;
+        case 'high': return e>=120 && e<200;
+        case 'max': return e>=200;
+        default: return false;
+      }
+    }
+
+    // Isometric voxel projection (simple diamond projection)
+    function drawIsometric() {
+      const originX = canvas.width / 2;
+      const originY = 100;
+      const s = voxelSize;
+      for (let z = 0; z < NZ; z++) {
+        for (let y = 0; y < NY; y++) {
+          for (let x = 0; x < NX; x++) {
+            const e = grid[z][y][x];
+            const col = energyColor(e, z);
+            if (!col) continue;
+            const isoX = originX + (x - y) * s;
+            const isoY = originY + (x + y) * (s * 0.5) + z * (s * 0.6);
+            const w = s - 2;
+            ctx.fillStyle = col;
+            ctx.fillRect(isoX - w / 2, isoY - w / 2, w, w);
+          }
+        }
+      }
+    }
+
+    function drawSlice(zIndex) {
+      const s = voxelSize;
+      const startX = 20, startY = 60;
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      for (let y = 0; y < NY; y++) {
+        for (let x = 0; x < NX; x++) {
+          const e = grid[zIndex][y][x];
+          const col = energyColor(e, zIndex);
+          if (!col) continue;
+          ctx.fillStyle = col;
+          ctx.fillRect(startX + x * s, startY + y * s, s - 2, s - 2);
+        }
+      }
+      ctx.strokeRect(startX - 2, startY - 2, NX * s + 4, NY * s + 4);
+    }
+
+    function drawDepthFog() {
+      const s = voxelSize;
+      // render back to front by z
+      const startX = 40, startY = 40;
+      for (let z = NZ - 1; z >= 0; z--) {
+        for (let y = 0; y < NY; y++) {
+          for (let x = 0; x < NX; x++) {
+            const e = grid[z][y][x];
+            const col = energyColor(e, z);
+            if (!col) continue;
+            const px = startX + x * (s - 4) + Math.floor(z * 0.35 * s);
+            const py = startY + y * (s - 4) + Math.floor(z * 0.35 * s);
+            ctx.fillStyle = col;
+            ctx.fillRect(px, py, s - 3, s - 3);
+          }
+        }
+      }
+    }
+
+    function updateStats() {
+      let active = 0, total = 0;
+      for (let z = 0; z < NZ; z++) {
+        for (let y = 0; y < NY; y++) {
+          for (let x = 0; x < NX; x++) {
+            const e = grid[z][y][x];
+            if (e > 0) { active++; total += e; }
+          }
+        }
+      }
+      const avg = active ? (total / active).toFixed(1) : 0;
+      document.getElementById('stats').textContent = `Gen: ${generation} | Active Voxels: ${active} | Avg Energy: ${avg} | Size: ${NX}×${NY}×${NZ}`;
+      // Show hint if in WebGL mode and nothing visible
+      if (renderMode === 'webgl3d' && active === 0) {
+        document.getElementById('settingsError').textContent = 'No active voxels to render in 3D. Paint or Randomize.';
+      } else if (document.getElementById('settingsError').textContent.startsWith('No active voxels')) {
+        document.getElementById('settingsError').textContent = '';
+      }
+    }
+
+    // Interaction: paint voxels with max energy, drag moves across XY on current depth slice
+    let isPainting = false;
+    let paintZ = Math.floor(NZ / 2);
+
+    canvas.addEventListener('mousedown', (e) => { isPainting = true; paintAt(e); });
+    canvas.addEventListener('mousemove', (e) => { if (isPainting) paintAt(e); });
+    canvas.addEventListener('mouseup', () => { isPainting = false; });
+    canvas.addEventListener('mouseleave', () => { isPainting = false; });
+
+    function paintAt(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (renderMode === 'slice') {
+        const s = voxelSize;
+        const startX = 20, startY = 60;
+        const gx = Math.floor((x - startX) / s);
+        const gy = Math.floor((y - startY) / s);
+        if (gx >= 0 && gx < NX && gy >= 0 && gy < NY) {
+          grid[paintZ][gy][gx] = 255;
+          draw();
+        }
+      } else {
+        // in iso/depth modes, approximate XY by inverse of projection near the middle region
+        // This is a simple heuristic to keep interaction usable.
+        const s = voxelSize;
+        const originX = canvas.width / 2;
+        const originY = 100;
+        // try multiple z layers near paintZ to find closest pixel
+        let best = null;
+        for (let z = Math.max(0, paintZ - 2); z <= Math.min(NZ - 1, paintZ + 2); z++) {
+          for (let yy = 0; yy < NY; yy += 2) {
+            for (let xx = 0; xx < NX; xx += 2) {
+              const isoX = originX + (xx - yy) * s;
+              const isoY = originY + (xx + yy) * (s * 0.5) + z * (s * 0.6);
+              const dx = isoX - x, dy = isoY - y;
+              const d2 = dx * dx + dy * dy;
+              if (!best || d2 < best.d2) best = { x: xx, y: yy, z, d2 };
+            }
+          }
+        }
+        if (best) {
+          for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+            const xx = Math.min(NX - 1, best.x + dx);
+            const yy = Math.min(NY - 1, best.y + dy);
+            grid[best.z][yy][xx] = 255;
+          }
+          draw();
+        }
+      }
+    }
+
+    // Controls
+    document.getElementById('startBtn').addEventListener('click', () => {
+      if (!isRunning) {
+        isRunning = true;
+        document.getElementById('startBtn').classList.add('active');
+        document.getElementById('stopBtn').classList.remove('active');
+        lastTime = performance.now();
+        rafId = requestAnimationFrame(loop);
+      }
+    });
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      isRunning = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      document.getElementById('startBtn').classList.remove('active');
+      document.getElementById('stopBtn').classList.add('active');
+    });
+    document.getElementById('stepBtn').addEventListener('click', () => { step(); draw(); });
+    document.getElementById('clearBtn').addEventListener('click', () => { clearAll(); draw(); });
+    document.getElementById('randomBtn').addEventListener('click', () => { randomFill(0.12); draw(); });
+
+    document.getElementById('speedSlider').addEventListener('input', (e) => {
+      speed = parseInt(e.target.value, 10);
+      document.getElementById('speedValue').textContent = speed;
+      refreshSettingsText();
+    });
+    document.getElementById('voxelSizeSlider').addEventListener('input', (e) => {
+      voxelSize = parseInt(e.target.value, 10);
+      document.getElementById('voxelSizeValue').textContent = voxelSize;
+      draw();
+      refreshSettingsText();
+    });
+    document.getElementById('renderMode').addEventListener('change', (e) => {
+      renderMode = e.target.value;
+      if (renderMode === 'webgl3d') ensureWebGL();
+      draw();
+      refreshSettingsText();
+    });
+    const transparentSelect = document.getElementById('transparentSelect');
+    transparentSelect.addEventListener('change', (e)=>{
+      transparentBand = e.target.value;
+      draw();
+      refreshSettingsText();
+    });
+
+    const bind = (id, key, fmt = (v)=>v) => {
+      const el = document.getElementById(id);
+      const label = document.getElementById(id + 'Value');
+      el.addEventListener('input', (e) => {
+        const v = el.type === 'range' ? parseFloat(e.target.value) : e.target.value;
+        params[key] = el.type === 'range' ? v : params[key];
+        label.textContent = (typeof v === 'number') ? (el.step && parseFloat(el.step) < 1 ? v.toFixed(2) : v) : fmt(v);
+        refreshSettingsText();
+      });
+    };
+    bind('baseDecay', 'baseDecay');
+    bind('echoWeight', 'echoWeight');
+    bind('diffXY', 'diffXY');
+    bind('diffZ', 'diffZ');
+    bind('resBoost', 'resBoost');
+    bind('spin', 'spin');
+    bind('birthTh', 'birthTh');
+    bind('activeTh', 'activeTh');
+    bind('minEnergy', 'minEnergy');
+
+    // Presets and randomizer
+    function loadPreset(name) {
+      let p;
+      if (name === 'default') p = { baseDecay: 0.88, echoWeight: 0.35, diffXY: 0.20, diffZ: 0.12, resBoost: 1.20, spin: 0.15, birthTh: 85, activeTh: 18, minEnergy: 8 };
+      else if (name === 'waves') p = { baseDecay: 0.92, echoWeight: 0.55, diffXY: 0.12, diffZ: 0.10, resBoost: 1.35, spin: 0.08, birthTh: 90, activeTh: 20, minEnergy: 6 };
+      else if (name === 'vortex') p = { baseDecay: 0.84, echoWeight: 0.25, diffXY: 0.24, diffZ: 0.16, resBoost: 1.25, spin: 0.28, birthTh: 95, activeTh: 16, minEnergy: 8 };
+      else if (name === 'chaos') p = { baseDecay: 0.78, echoWeight: 0.40, diffXY: 0.30, diffZ: 0.22, resBoost: 1.45, spin: 0.32, birthTh: 110, activeTh: 14, minEnergy: 5 };
+      params = { ...params, ...p };
+      syncParamUI();
+    }
+
+    function randomizeParams() {
+      const rnd = (a, b) => a + Math.random() * (b - a);
+      const p = {
+        baseDecay: +rnd(0.72, 0.95).toFixed(2),
+        echoWeight: +rnd(0.0, 0.8).toFixed(2),
+        diffXY: +rnd(0.05, 0.35).toFixed(2),
+        diffZ: +rnd(0.05, 0.30).toFixed(2),
+        resBoost: +rnd(1.05, 1.7).toFixed(2),
+        spin: +rnd(0.05, 0.35).toFixed(2),
+        birthTh: Math.floor(rnd(60, 160)),
+        activeTh: Math.floor(rnd(8, 40)),
+        minEnergy: Math.floor(rnd(0, 20))
+      };
+      if (p.diffZ > p.diffXY) p.diffZ = +(p.diffXY - 0.02).toFixed(2);
+      params = { ...params, ...p };
+      syncParamUI();
+    }
+
+    function syncParamUI() {
+      const set = (id, v, fmt = (x)=>x) => {
+        const el = document.getElementById(id);
+        const label = document.getElementById(id + 'Value');
+        el.value = v;
+        label.textContent = (typeof v === 'number') ? ((el.step && parseFloat(el.step) < 1) ? (+v).toFixed(2) : v) : fmt(v);
+      };
+      set('baseDecay', params.baseDecay);
+      set('echoWeight', params.echoWeight);
+      set('diffXY', params.diffXY);
+      set('diffZ', params.diffZ);
+      set('resBoost', params.resBoost);
+      set('spin', params.spin);
+      set('birthTh', params.birthTh);
+      set('activeTh', params.activeTh);
+      set('minEnergy', params.minEnergy);
+      refreshSettingsText();
+    }
+
+    // JSON settings serialization
+    function getSettingsObject() {
+      return {
+        NX, NY, NZ,
+        speed,
+        voxelSize,
+        renderMode,
+        transparentBand,
+        params: { ...params }
+      };
+    }
+    function refreshSettingsText() {
+      const ta = document.getElementById('settingsText');
+      if (!ta) return;
+      ta.value = JSON.stringify(getSettingsObject(), null, 2);
+    }
+    function applySettingsFromText() {
+      const ta = document.getElementById('settingsText');
+      const errEl = document.getElementById('settingsError');
+      errEl.textContent = '';
+      try {
+        const obj = JSON.parse(ta.value);
+        if (obj.NX && obj.NY && obj.NZ && (obj.NX !== NX || obj.NY !== NY || obj.NZ !== NZ)) {
+          NX = obj.NX; NY = obj.NY; NZ = obj.NZ;
+          clearAll();
+        }
+        if (obj.params) {
+          params = { ...params, ...obj.params };
+          syncParamUI();
+        } else {
+          refreshSettingsText();
+        }
+        if (typeof obj.speed === 'number') {
+          speed = obj.speed;
+          const ss = document.getElementById('speedSlider');
+          ss.value = speed; document.getElementById('speedValue').textContent = speed;
+        }
+        if (typeof obj.voxelSize === 'number') {
+          voxelSize = obj.voxelSize;
+          const vs = document.getElementById('voxelSizeSlider');
+          vs.value = voxelSize; document.getElementById('voxelSizeValue').textContent = voxelSize;
+        }
+        if (obj.renderMode) {
+          renderMode = obj.renderMode;
+          const rm = document.getElementById('renderMode');
+          rm.value = renderMode;
+          if (renderMode === 'webgl3d') ensureWebGL();
+        }
+        if (obj.transparentBand) {
+          transparentBand = obj.transparentBand;
+          const ts = document.getElementById('transparentSelect');
+          if (ts) ts.value = transparentBand;
+        }
+        draw();
+        refreshSettingsText();
+      } catch (e) {
+        errEl.textContent = 'Invalid JSON: ' + e.message;
+      }
+    }
+
+    // Settings buttons
+    document.getElementById('applySettingsBtn').addEventListener('click', applySettingsFromText);
+    document.getElementById('copySettingsBtn').addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('settingsText').value).catch(()=>{});
+    });
+    document.getElementById('refreshSettingsBtn').addEventListener('click', refreshSettingsText);
+    document.getElementById('randomizeAndShowBtn').addEventListener('click', () => { randomizeParams(); refreshSettingsText(); });
+
+    // Auto-parse on blur for convenience
+    document.getElementById('settingsText').addEventListener('blur', () => {
+      if (document.getElementById('settingsError').textContent) return; // don't auto-apply if error shown
+      applySettingsFromText();
+    });
+
+    // Simulation loop
+    function loop(ts) {
+      if (!isRunning) return;
+      const interval = 1000 / speed;
+      if (ts - lastTime >= interval) {
+        step();
+        draw();
+        lastTime = ts;
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+
+    // Utilities
+    function clearAll() {
+      grid = alloc3D(NX, NY, NZ, 0);
+      prev = alloc3D(NX, NY, NZ, 0);
+      echo = alloc3D(NX, NY, NZ, 0);
+      generation = 0;
+    }
+
+    function randomFill(prob = 0.1) {
+      clearAll();
+      for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+        if (Math.random() < prob) grid[z][y][x] = Math.floor(60 + Math.random() * 195);
+      }
+    }
+
+    // Init
+    randomFill(0.12);
+    syncParamUI();
+    refreshSettingsText();
+    draw();
+
+    // WebGL support
+    function ensureWebGL() {
+      if (gl) return;
+      // match canvas backing store to device pixel ratio; handle hidden canvas clientWidth=0
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      let w = glCanvas.clientWidth;
+      let h = glCanvas.clientHeight;
+      if (w < 10 || h < 10) { // fallback when hidden (display:none)
+        w = canvas.width; h = canvas.height;
+      }
+      glCanvas.width = Math.floor(w * dpr);
+      glCanvas.height = Math.floor(h * dpr);
+      gl = glCanvas.getContext('webgl', { antialias: true });
+      if (!gl) {
+        console.warn('WebGL not available');
+        return;
+      }
+      initGLResources();
+      setupGLInteractions();
+    }
+
+    let glProg, glPosBuf, glColBuf, glProjLoc, glViewLoc, glPosLoc, glColLoc, glPointSizeLoc;
+
+    function compileShader(type, src) {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(sh));
+        gl.deleteShader(sh);
+        return null;
+      }
+      return sh;
+    }
+
+    function initGLResources() {
+      const vs = `
+      attribute vec3 aPos;
+      attribute vec3 aCol;
+      uniform mat4 uProj;
+      uniform mat4 uView;
+      uniform float uPointSize;
+      varying vec3 vCol;
+      void main(){
+        gl_Position = uProj * uView * vec4(aPos, 1.0);
+        vCol = aCol;
+        gl_PointSize = uPointSize;
+      }`;
+      const fs = `
+      precision mediump float;
+      varying vec3 vCol;
+      void main(){
+        // circular point sprite
+        vec2 uv = gl_PointCoord * 2.0 - 1.0;
+        float d = dot(uv, uv);
+        if (d > 1.0) discard;
+        gl_FragColor = vec4(vCol, 1.0);
+      }`;
+      const vsh = compileShader(gl.VERTEX_SHADER, vs);
+      const fsh = compileShader(gl.FRAGMENT_SHADER, fs);
+      glProg = gl.createProgram();
+      gl.attachShader(glProg, vsh);
+      gl.attachShader(glProg, fsh);
+      gl.linkProgram(glProg);
+      if (!gl.getProgramParameter(glProg, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(glProg));
+        return;
+      }
+      gl.useProgram(glProg);
+      glPosLoc = gl.getAttribLocation(glProg, 'aPos');
+      glColLoc = gl.getAttribLocation(glProg, 'aCol');
+      glProjLoc = gl.getUniformLocation(glProg, 'uProj');
+      glViewLoc = gl.getUniformLocation(glProg, 'uView');
+      glPointSizeLoc = gl.getUniformLocation(glProg, 'uPointSize');
+      glPosBuf = gl.createBuffer();
+      glColBuf = gl.createBuffer();
+      gl.enable(gl.DEPTH_TEST);
+      gl.clearColor(0.04, 0.06, 0.08, 1);
+    }
+
+    function setupGLInteractions() {
+      glCanvas.addEventListener('mousedown', (e)=>{ isOrbiting = true; lastMouse.x = e.clientX; lastMouse.y = e.clientY; });
+      window.addEventListener('mouseup', ()=>{ isOrbiting = false; });
+      window.addEventListener('mousemove', (e)=>{
+        if (!isOrbiting) return;
+        const dx = e.clientX - lastMouse.x;
+        const dy = e.clientY - lastMouse.y;
+        lastMouse.x = e.clientX; lastMouse.y = e.clientY;
+        camYaw += dx * 0.005;
+        camPitch = Math.max(-1.2, Math.min(1.2, camPitch + dy * 0.005));
+        draw();
+      });
+      glCanvas.addEventListener('wheel', (e)=>{
+        e.preventDefault();
+        camDist = Math.max(20, Math.min(200, camDist + (e.deltaY>0?5:-5)));
+        draw();
+      }, { passive: false });
+    }
+
+    function makePerspective(fovy, aspect, near, far) {
+      const f = 1.0 / Math.tan(fovy / 2);
+      const nf = 1 / (near - far);
+      // column-major
+      return [
+        f/aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far+near)*nf, -1,
+        0, 0, (2*far*near)*nf, 0
+      ];
+    }
+
+    function lookAt(eye, center, up) {
+      const zx = eye[0]-center[0], zy = eye[1]-center[1], zz = eye[2]-center[2];
+      let zlen = Math.hypot(zx,zy,zz); const zxN=zx/zlen, zyN=zy/zlen, zzN=zz/zlen;
+      const xx = up[1]*zzN - up[2]*zyN;
+      const xy = up[2]*zxN - up[0]*zzN;
+      const xz = up[0]*zyN - up[1]*zxN;
+      let xlen = Math.hypot(xx,xy,xz); const xxN=xx/xlen, xyN=xy/xlen, xzN=xz/xlen;
+      const yx = zyN*xzN - zzN*xyN;
+      const yy = zzN*xxN - zxN*xzN;
+      const yz = zxN*xyN - zyN*xxN;
+      // column-major view matrix
+      return [
+        xxN, yx, zxN, 0,
+        xyN, yy, zyN, 0,
+        xzN, yz, zzN, 0,
+        -(xxN*eye[0]+xyN*eye[1]+xzN*eye[2]),
+        -(yx*eye[0]+yy*eye[1]+yz*eye[2]),
+        -(zxN*eye[0]+zyN*eye[1]+zzN*eye[2]),
+        1
+      ];
+    }
+
+    function drawWebGL3D() {
+      if (!gl) ensureWebGL();
+      if (!gl) return;
+      glCanvas.style.display = 'block';
+      canvas.style.display = 'none';
+      gl.viewport(0,0,glCanvas.width, glCanvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+      // Build positions and colors from active voxels, centered and scaled
+      const positions = [];
+      const colors = [];
+      const cx = (NX-1)/2, cy = (NY-1)/2, cz = (NZ-1)/2;
+      const scale = 1.0; // unit spacing
+      for (let z = 0; z < NZ; z++) {
+        for (let y = 0; y < NY; y++) {
+          for (let x = 0; x < NX; x++) {
+            const e = grid[z][y][x];
+            if (e <= 0 || isTransparent(e)) continue;
+            positions.push((x - cx)*scale, (y - cy)*scale, (z - cz)*scale);
+            const col = cssToRGB(energyColor(e, z));
+            colors.push(col[0]/255, col[1]/255, col[2]/255);
+          }
+        }
+      }
+      const count = positions.length / 3;
+      if (count === 0) return;
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, glPosBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(glPosLoc);
+      gl.vertexAttribPointer(glPosLoc, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, glColBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(glColLoc);
+      gl.vertexAttribPointer(glColLoc, 3, gl.FLOAT, false, 0, 0);
+
+      const aspect = glCanvas.width / glCanvas.height;
+      const proj = makePerspective(45*Math.PI/180, aspect, 0.1, 1000.0);
+      const eye = [
+        camDist*Math.cos(camPitch)*Math.cos(camYaw),
+        camDist*Math.sin(camPitch),
+        camDist*Math.cos(camPitch)*Math.sin(camYaw)
+      ];
+      const center = [0,0,0];
+      const up = [0,1,0];
+      const view = lookAt(eye, center, up);
+      gl.uniformMatrix4fv(glProjLoc, false, new Float32Array(proj));
+      gl.uniformMatrix4fv(glViewLoc, false, new Float32Array(view));
+      const ps = Math.max(2.0, voxelSize * 1.2);
+      gl.uniform1f(glPointSizeLoc, ps);
+
+      gl.drawArrays(gl.POINTS, 0, count);
+    }
+
+    function cssToRGB(css) {
+      // expects rgb(r,g,b)
+      const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(css);
+      if (!m) return [255,255,255];
+      return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10)];
+    }
+
+    // Update render mode change listener to toggle canvases (removed duplicate at bottom)
+    // (Second duplicate listener removed to avoid double registration)
+    document.getElementById('renderMode').addEventListener('change', (e) => {
+      renderMode = e.target.value;
+      if (renderMode === 'webgl3d') ensureWebGL();
+      draw();
+    });
+  </script>
+</body>
+</html>

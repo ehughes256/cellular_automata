@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Echo Cellular Automata</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 800px;
+        }
+
+        #canvas {
+            border: 3px solid white;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            cursor: pointer;
+            background: black;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: white;
+            color: #667eea;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.active {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+
+        .slider-container label {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        input[type="range"] {
+            width: 150px;
+        }
+
+        .info {
+            margin-top: 20px;
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 800px;
+            backdrop-filter: blur(10px);
+        }
+
+        .info h3 {
+            margin-top: 0;
+        }
+
+        .info ul {
+            text-align: left;
+            line-height: 1.6;
+        }
+
+        .stats {
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .config-section {
+            margin-top: 20px;
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 900px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+
+        .config-section h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .preset-buttons button {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌌 Quantum Echo Cellular Automata 🌌</h1>
+    <div class="subtitle">
+        <strong>Novel Rules:</strong> Cells have "energy levels" (0-255) that decay and propagate based on neighborhood density and temporal echoes.
+        Each cell remembers its state from 2 generations ago, creating wave-like interference patterns.
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="controls">
+        <button id="startBtn">Start</button>
+        <button id="stopBtn">Stop</button>
+        <button id="clearBtn">Clear</button>
+        <button id="randomBtn">Random</button>
+
+        <div class="slider-container">
+            <label>Speed: <span id="speedValue">5</span></label>
+            <input type="range" id="speedSlider" min="1" max="60" value="5">
+        </div>
+
+        <div class="slider-container">
+            <label>Cell Size: <span id="cellSizeValue">4</span></label>
+            <input type="range" id="cellSizeSlider" min="2" max="10" value="4">
+        </div>
+    </div>
+
+    <div class="config-section">
+        <h3>⚙️ Rule Parameters</h3>
+        <div class="config-grid">
+            <div class="slider-container">
+                <label>Base Decay: <span id="baseDecayValue">0.85</span></label>
+                <input type="range" id="baseDecaySlider" min="0.5" max="0.99" step="0.01" value="0.85">
+            </div>
+
+            <div class="slider-container">
+                <label>Crowded Decay: <span id="crowdedDecayValue">0.70</span></label>
+                <input type="range" id="crowdedDecaySlider" min="0.4" max="0.9" step="0.01" value="0.70">
+            </div>
+
+            <div class="slider-container">
+                <label>Sparse Decay: <span id="sparseDecayValue">0.90</span></label>
+                <input type="range" id="sparseDecaySlider" min="0.7" max="0.99" step="0.01" value="0.90">
+            </div>
+
+            <div class="slider-container">
+                <label>Echo Weight: <span id="echoWeightValue">0.30</span></label>
+                <input type="range" id="echoWeightSlider" min="0" max="1" step="0.05" value="0.30">
+            </div>
+
+            <div class="slider-container">
+                <label>Energy Transfer: <span id="energyTransferValue">0.20</span></label>
+                <input type="range" id="energyTransferSlider" min="0" max="0.5" step="0.05" value="0.20">
+            </div>
+
+            <div class="slider-container">
+                <label>Active Threshold: <span id="activeThresholdValue">20</span></label>
+                <input type="range" id="activeThresholdSlider" min="5" max="100" step="5" value="20">
+            </div>
+
+            <div class="slider-container">
+                <label>Min Energy: <span id="minEnergyValue">10</span></label>
+                <input type="range" id="minEnergySlider" min="0" max="50" step="5" value="10">
+            </div>
+
+            <div class="slider-container">
+                <label>Resonance Boost: <span id="resonanceBoostValue">1.15</span></label>
+                <input type="range" id="resonanceBoostSlider" min="1" max="2" step="0.05" value="1.15">
+            </div>
+
+            <div class="slider-container">
+                <label>Quantum Birth: <span id="quantumBirthValue">80</span></label>
+                <input type="range" id="quantumBirthSlider" min="50" max="200" step="10" value="80">
+            </div>
+
+            <div class="slider-container">
+                <label>Birth Boost: <span id="birthBoostValue">120</span></label>
+                <input type="range" id="birthBoostSlider" min="80" max="255" step="10" value="120">
+            </div>
+        </div>
+
+        <div class="preset-buttons">
+            <button onclick="loadPreset('default')">Default</button>
+            <button onclick="loadPreset('stable')">Stable</button>
+            <button onclick="loadPreset('chaotic')">Chaotic</button>
+            <button onclick="loadPreset('waves')">Wave-like</button>
+            <button onclick="loadPreset('explosive')">Explosive</button>
+            <button onclick="randomizeSettings()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">🎲 Randomize Settings</button>
+        </div>
+    </div>
+
+    <div class="stats" id="stats">
+        Generation: 0 | Living Cells: 0 | Average Energy: 0
+    </div>
+
+    <div class="info">
+        <h3>How It Works:</h3>
+        <ul>
+            <li><strong>Energy Propagation:</strong> Cells don't just live or die - they have energy levels (0-255)</li>
+            <li><strong>Temporal Echo:</strong> Each cell remembers its state from 2 generations ago, creating interference patterns</li>
+            <li><strong>Adaptive Decay:</strong> Energy decays faster in crowded neighborhoods, slower in sparse ones</li>
+            <li><strong>Quantum Boost:</strong> When exactly 3 neighbors are active AND their combined energy matches certain patterns, cells receive energy boosts</li>
+            <li><strong>Wave Interference:</strong> Current energy + echo energy creates constructive/destructive interference</li>
+            <li><strong>Color Coding:</strong> Blue = low energy, Cyan = medium, Yellow = high, Red = very high</li>
+        </ul>
+        <p><strong>Interaction:</strong> Click and drag to paint cells with maximum energy!</p>
+    </div>
+
+    <script>
+        // Quantum Echo Cellular Automata
+        // Original rules designed by GitHub Copilot, 2025
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let cellSize = 4;
+        let cols, rows;
+        let grid, previousGrid, echoGrid;
+        let isRunning = false;
+        let generation = 0;
+        let animationId;
+        let speed = 5; // generations per second
+        let lastUpdateTime = 0;
+
+        // Configurable parameters
+        let params = {
+            baseDecay: 0.85,
+            crowdedDecay: 0.70,
+            sparseDecay: 0.90,
+            echoWeight: 0.30,
+            energyTransfer: 0.20,
+            activeThreshold: 20,
+            minEnergy: 10,
+            resonanceBoost: 1.15,
+            quantumBirth: 80,
+            birthBoost: 120
+        };
+
+        // Initialize canvas and grids
+        function initCanvas() {
+            canvas.width = 800;
+            canvas.height = 600;
+            cols = Math.floor(canvas.width / cellSize);
+            rows = Math.floor(canvas.height / cellSize);
+
+            grid = createEmptyGrid();
+            previousGrid = createEmptyGrid();
+            echoGrid = createEmptyGrid();
+        }
+
+        function createEmptyGrid() {
+            return Array(rows).fill(null).map(() => Array(cols).fill(0));
+        }
+
+        function copyGrid(source) {
+            return source.map(row => [...row]);
+        }
+
+        // Core CA Rules: Quantum Echo System
+        function getNextGeneration() {
+            const newGrid = createEmptyGrid();
+
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const currentEnergy = grid[i][j];
+                    const echoEnergy = echoGrid[i][j];
+                    const neighbors = getNeighborInfo(i, j);
+
+                    let newEnergy = 0;
+
+                    // Rule 1: Temporal Echo Interference
+                    // Combine current energy with echo (memory from 2 generations ago)
+                    const echoWeight = params.echoWeight;
+                    const interference = (currentEnergy + echoEnergy * echoWeight) / (1 + echoWeight);
+
+                    // Rule 2: Neighborhood Energy Transfer
+                    const avgNeighborEnergy = neighbors.totalEnergy / 8;
+                    const activeNeighbors = neighbors.count;
+
+                    // Rule 3: Adaptive Decay based on density
+                    let decayRate = params.baseDecay;
+                    if (activeNeighbors > 5) {
+                        decayRate = params.crowdedDecay; // Faster decay in crowded areas
+                    } else if (activeNeighbors < 2) {
+                        decayRate = params.sparseDecay; // Slower decay in sparse areas
+                    }
+
+                    // Rule 4: Quantum Boost Conditions
+                    let quantumBoost = 0;
+
+                    // Exactly 3 active neighbors with specific energy patterns
+                    if (activeNeighbors === 3) {
+                        const energySignature = neighbors.totalEnergy % 100;
+                        if (energySignature > 60 && energySignature < 80) {
+                            quantumBoost = params.birthBoost; // Birth with boost
+                        } else {
+                            quantumBoost = params.quantumBirth; // Normal birth
+                        }
+                    }
+
+                    // Rule 5: Survival with energy transfer
+                    if (currentEnergy > 0) {
+                        if (activeNeighbors === 2 || activeNeighbors === 3) {
+                            // Survive and absorb some neighbor energy
+                            newEnergy = interference * decayRate + avgNeighborEnergy * params.energyTransfer;
+                        } else if (activeNeighbors === 4 && avgNeighborEnergy > 100) {
+                            // Special case: survive with high energy neighbors
+                            newEnergy = interference * 0.8 + avgNeighborEnergy * 0.15;
+                        } else {
+                            // Death by decay
+                            newEnergy = interference * 0.5;
+                        }
+                    } else {
+                        // Rule 6: Birth conditions
+                        if (quantumBoost > 0) {
+                            newEnergy = quantumBoost;
+                        } else if (activeNeighbors === 4 && avgNeighborEnergy > 120) {
+                            // Alternative birth: 4 neighbors with high energy
+                            newEnergy = avgNeighborEnergy * 0.4;
+                        }
+                    }
+
+                    // Rule 7: Wave resonance - boost if echo and current align
+                    if (Math.abs(currentEnergy - echoEnergy) < 20 && currentEnergy > 50) {
+                        newEnergy *= params.resonanceBoost; // Resonance amplification
+                    }
+
+                    // Clamp energy to valid range
+                    newEnergy = Math.max(0, Math.min(255, newEnergy));
+
+                    // Only keep cells with meaningful energy
+                    newGrid[i][j] = newEnergy > params.minEnergy ? newEnergy : 0;
+                }
+            }
+
+            // Update temporal memory (echo grid stores state from 2 generations ago)
+            echoGrid = copyGrid(previousGrid);
+            previousGrid = copyGrid(grid);
+            grid = newGrid;
+            generation++;
+        }
+
+        function getNeighborInfo(row, col) {
+            let count = 0;
+            let totalEnergy = 0;
+
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    if (i === 0 && j === 0) continue;
+
+                    const newRow = (row + i + rows) % rows;
+                    const newCol = (col + j + cols) % cols;
+                    const energy = grid[newRow][newCol];
+
+                    if (energy > params.activeThreshold) { // Threshold for "active"
+                        count++;
+                    }
+                    totalEnergy += energy;
+                }
+            }
+
+            return { count, totalEnergy };
+        }
+
+        // Rendering
+        function drawGrid() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const energy = grid[i][j];
+                    if (energy > 0) {
+                        ctx.fillStyle = getColorForEnergy(energy);
+                        ctx.fillRect(j * cellSize, i * cellSize, cellSize - 1, cellSize - 1);
+                    }
+                }
+            }
+
+            updateStats();
+        }
+
+        function getColorForEnergy(energy) {
+            // Color gradient based on energy level
+            if (energy < 50) {
+                // Blue to cyan (low energy)
+                const intensity = Math.floor((energy / 50) * 255);
+                return `rgb(0, ${intensity}, 255)`;
+            } else if (energy < 120) {
+                // Cyan to yellow (medium energy)
+                const t = (energy - 50) / 70;
+                const r = Math.floor(t * 255);
+                const g = 255;
+                const b = Math.floor((1 - t) * 255);
+                return `rgb(${r}, ${g}, ${b})`;
+            } else if (energy < 200) {
+                // Yellow to red (high energy)
+                const t = (energy - 120) / 80;
+                const r = 255;
+                const g = Math.floor((1 - t) * 255);
+                return `rgb(${r}, ${g}, 0)`;
+            } else {
+                // Red to white (very high energy)
+                const t = (energy - 200) / 55;
+                const g = Math.floor(t * 255);
+                const b = Math.floor(t * 255);
+                return `rgb(255, ${g}, ${b})`;
+            }
+        }
+
+        function updateStats() {
+            let livingCells = 0;
+            let totalEnergy = 0;
+
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (grid[i][j] > 0) {
+                        livingCells++;
+                        totalEnergy += grid[i][j];
+                    }
+                }
+            }
+
+            const avgEnergy = livingCells > 0 ? (totalEnergy / livingCells).toFixed(1) : 0;
+            document.getElementById('stats').textContent =
+                `Generation: ${generation} | Living Cells: ${livingCells} | Average Energy: ${avgEnergy}`;
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            if (!isRunning) return;
+
+            const interval = 1000 / speed;
+            if (timestamp - lastUpdateTime >= interval) {
+                getNextGeneration();
+                drawGrid();
+                lastUpdateTime = timestamp;
+            }
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function start() {
+            if (!isRunning) {
+                isRunning = true;
+                lastUpdateTime = performance.now();
+                animate(lastUpdateTime);
+                document.getElementById('startBtn').classList.add('active');
+                document.getElementById('stopBtn').classList.remove('active');
+            }
+        }
+
+        function stop() {
+            isRunning = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            document.getElementById('startBtn').classList.remove('active');
+            document.getElementById('stopBtn').classList.add('active');
+        }
+
+        function clear() {
+            stop();
+            grid = createEmptyGrid();
+            previousGrid = createEmptyGrid();
+            echoGrid = createEmptyGrid();
+            generation = 0;
+            drawGrid();
+        }
+
+        function randomize() {
+            clear();
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (Math.random() < 0.15) {
+                        grid[i][j] = Math.random() * 255;
+                    }
+                }
+            }
+            drawGrid();
+        }
+
+        // Mouse interaction
+        let isDrawing = false;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            drawCell(e);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                drawCell(e);
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+
+        function drawCell(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const col = Math.floor(x / cellSize);
+            const row = Math.floor(y / cellSize);
+
+            if (row >= 0 && row < rows && col >= 0 && col < cols) {
+                grid[row][col] = 255; // Maximum energy
+                if (!isRunning) {
+                    drawGrid();
+                }
+            }
+        }
+
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', start);
+        document.getElementById('stopBtn').addEventListener('click', stop);
+        document.getElementById('clearBtn').addEventListener('click', clear);
+        document.getElementById('randomBtn').addEventListener('click', randomize);
+
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            speed = parseInt(e.target.value);
+            document.getElementById('speedValue').textContent = speed;
+        });
+
+        document.getElementById('cellSizeSlider').addEventListener('input', (e) => {
+            cellSize = parseInt(e.target.value);
+            document.getElementById('cellSizeValue').textContent = cellSize;
+            initCanvas();
+            randomize();
+        });
+
+        // Parameter sliders
+        document.getElementById('baseDecaySlider').addEventListener('input', (e) => {
+            params.baseDecay = parseFloat(e.target.value);
+            document.getElementById('baseDecayValue').textContent = params.baseDecay.toFixed(2);
+        });
+
+        document.getElementById('crowdedDecaySlider').addEventListener('input', (e) => {
+            params.crowdedDecay = parseFloat(e.target.value);
+            document.getElementById('crowdedDecayValue').textContent = params.crowdedDecay.toFixed(2);
+        });
+
+        document.getElementById('sparseDecaySlider').addEventListener('input', (e) => {
+            params.sparseDecay = parseFloat(e.target.value);
+            document.getElementById('sparseDecayValue').textContent = params.sparseDecay.toFixed(2);
+        });
+
+        document.getElementById('echoWeightSlider').addEventListener('input', (e) => {
+            params.echoWeight = parseFloat(e.target.value);
+            document.getElementById('echoWeightValue').textContent = params.echoWeight.toFixed(2);
+        });
+
+        document.getElementById('energyTransferSlider').addEventListener('input', (e) => {
+            params.energyTransfer = parseFloat(e.target.value);
+            document.getElementById('energyTransferValue').textContent = params.energyTransfer.toFixed(2);
+        });
+
+        document.getElementById('activeThresholdSlider').addEventListener('input', (e) => {
+            params.activeThreshold = parseInt(e.target.value);
+            document.getElementById('activeThresholdValue').textContent = params.activeThreshold;
+        });
+
+        document.getElementById('minEnergySlider').addEventListener('input', (e) => {
+            params.minEnergy = parseInt(e.target.value);
+            document.getElementById('minEnergyValue').textContent = params.minEnergy;
+        });
+
+        document.getElementById('resonanceBoostSlider').addEventListener('input', (e) => {
+            params.resonanceBoost = parseFloat(e.target.value);
+            document.getElementById('resonanceBoostValue').textContent = params.resonanceBoost.toFixed(2);
+        });
+
+        document.getElementById('quantumBirthSlider').addEventListener('input', (e) => {
+            params.quantumBirth = parseInt(e.target.value);
+            document.getElementById('quantumBirthValue').textContent = params.quantumBirth;
+        });
+
+        document.getElementById('birthBoostSlider').addEventListener('input', (e) => {
+            params.birthBoost = parseInt(e.target.value);
+            document.getElementById('birthBoostValue').textContent = params.birthBoost;
+        });
+
+        // Preset configurations
+        function loadPreset(preset) {
+            switch(preset) {
+                case 'default':
+                    params = {
+                        baseDecay: 0.85,
+                        crowdedDecay: 0.70,
+                        sparseDecay: 0.90,
+                        echoWeight: 0.30,
+                        energyTransfer: 0.20,
+                        activeThreshold: 20,
+                        minEnergy: 10,
+                        resonanceBoost: 1.15,
+                        quantumBirth: 80,
+                        birthBoost: 120
+                    };
+                    break;
+                case 'stable':
+                    params = {
+                        baseDecay: 0.90,
+                        crowdedDecay: 0.85,
+                        sparseDecay: 0.92,
+                        echoWeight: 0.20,
+                        energyTransfer: 0.15,
+                        activeThreshold: 25,
+                        minEnergy: 15,
+                        resonanceBoost: 1.10,
+                        quantumBirth: 70,
+                        birthBoost: 100
+                    };
+                    break;
+                case 'chaotic':
+                    params = {
+                        baseDecay: 0.75,
+                        crowdedDecay: 0.60,
+                        sparseDecay: 0.85,
+                        echoWeight: 0.50,
+                        energyTransfer: 0.30,
+                        activeThreshold: 15,
+                        minEnergy: 5,
+                        resonanceBoost: 1.30,
+                        quantumBirth: 100,
+                        birthBoost: 150
+                    };
+                    break;
+                case 'waves':
+                    params = {
+                        baseDecay: 0.88,
+                        crowdedDecay: 0.82,
+                        sparseDecay: 0.93,
+                        echoWeight: 0.60,
+                        energyTransfer: 0.10,
+                        activeThreshold: 20,
+                        minEnergy: 8,
+                        resonanceBoost: 1.40,
+                        quantumBirth: 90,
+                        birthBoost: 130
+                    };
+                    break;
+                case 'explosive':
+                    params = {
+                        baseDecay: 0.70,
+                        crowdedDecay: 0.50,
+                        sparseDecay: 0.80,
+                        echoWeight: 0.40,
+                        energyTransfer: 0.35,
+                        activeThreshold: 10,
+                        minEnergy: 5,
+                        resonanceBoost: 1.50,
+                        quantumBirth: 120,
+                        birthBoost: 200
+                    };
+                    break;
+            }
+            updateSliders();
+            randomize();
+        }
+
+        function updateSliders() {
+            document.getElementById('baseDecaySlider').value = params.baseDecay;
+            document.getElementById('baseDecayValue').textContent = params.baseDecay.toFixed(2);
+
+            document.getElementById('crowdedDecaySlider').value = params.crowdedDecay;
+            document.getElementById('crowdedDecayValue').textContent = params.crowdedDecay.toFixed(2);
+
+            document.getElementById('sparseDecaySlider').value = params.sparseDecay;
+            document.getElementById('sparseDecayValue').textContent = params.sparseDecay.toFixed(2);
+
+            document.getElementById('echoWeightSlider').value = params.echoWeight;
+            document.getElementById('echoWeightValue').textContent = params.echoWeight.toFixed(2);
+
+            document.getElementById('energyTransferSlider').value = params.energyTransfer;
+            document.getElementById('energyTransferValue').textContent = params.energyTransfer.toFixed(2);
+
+            document.getElementById('activeThresholdSlider').value = params.activeThreshold;
+            document.getElementById('activeThresholdValue').textContent = params.activeThreshold;
+
+            document.getElementById('minEnergySlider').value = params.minEnergy;
+            document.getElementById('minEnergyValue').textContent = params.minEnergy;
+
+            document.getElementById('resonanceBoostSlider').value = params.resonanceBoost;
+            document.getElementById('resonanceBoostValue').textContent = params.resonanceBoost.toFixed(2);
+
+            document.getElementById('quantumBirthSlider').value = params.quantumBirth;
+            document.getElementById('quantumBirthValue').textContent = params.quantumBirth;
+
+            document.getElementById('birthBoostSlider').value = params.birthBoost;
+            document.getElementById('birthBoostValue').textContent = params.birthBoost;
+        }
+
+        // Randomize all parameter settings
+        function randomizeSettings() {
+            // Helper function to generate random value in range
+            const randomInRange = (min, max) => Math.random() * (max - min) + min;
+            const randomIntInRange = (min, max) => Math.floor(randomInRange(min, max));
+
+            // Generate random parameters within reasonable ranges
+            params = {
+                baseDecay: parseFloat(randomInRange(0.6, 0.95).toFixed(2)),
+                crowdedDecay: parseFloat(randomInRange(0.45, 0.85).toFixed(2)),
+                sparseDecay: parseFloat(randomInRange(0.75, 0.99).toFixed(2)),
+                echoWeight: parseFloat(randomInRange(0, 0.8).toFixed(2)),
+                energyTransfer: parseFloat(randomInRange(0.05, 0.45).toFixed(2)),
+                activeThreshold: randomIntInRange(5, 80),
+                minEnergy: randomIntInRange(0, 40),
+                resonanceBoost: parseFloat(randomInRange(1.0, 1.8).toFixed(2)),
+                quantumBirth: randomIntInRange(50, 180),
+                birthBoost: randomIntInRange(90, 240)
+            };
+
+            // Ensure crowded decay is less than or equal to base decay (logical constraint)
+            if (params.crowdedDecay > params.baseDecay) {
+                params.crowdedDecay = parseFloat((params.baseDecay - 0.05).toFixed(2));
+            }
+
+            // Ensure sparse decay is greater than or equal to base decay (logical constraint)
+            if (params.sparseDecay < params.baseDecay) {
+                params.sparseDecay = parseFloat((params.baseDecay + 0.05).toFixed(2));
+            }
+
+            // Ensure birth boost is greater than quantum birth
+            if (params.birthBoost <= params.quantumBirth) {
+                params.birthBoost = params.quantumBirth + 30;
+            }
+
+            updateSliders();
+            randomize();
+        }
+
+        // Initialize
+        initCanvas();
+        randomize();
+        drawGrid();
+    </script>
+</body>
+</html>
+
