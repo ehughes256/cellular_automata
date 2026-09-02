@@ -5,188 +5,379 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hyperflux 3D Cellular Automata</title>
   <style>
+    /* The lattice is the only thing on this page allowed to have a hue.
+       Every surface, label and control below is neutral by design so that
+       nothing competes with the energy field for attention. */
+    :root {
+      --void:  #0A0B0D;
+      --panel: #121418;
+      --raise: #191C22;
+      --bar:   #232932;
+      --line:  #23272F;
+      --ink:   #E6E9EE;
+      --dim:   #79808C;
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
-      padding: 20px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-        Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue",
-        Arial, sans-serif;
-      background: radial-gradient(1200px 600px at 20% 0%, #0f2027 0%, #203a43 50%, #2c5364 100%);
-      color: #eef8ff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-    h1 {
-      margin: 0 0 8px;
-      text-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-    }
-    .subtitle {
-      opacity: 0.9;
-      font-size: 14px;
-      margin-bottom: 16px;
-      text-align: center;
-      max-width: 900px;
-    }
-    #canvas {
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-      cursor: crosshair;
-      background: #0a0f12;
-    }
-    .controls {
-      margin-top: 16px;
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-      align-items: center;
-    }
-    button {
-      padding: 10px 18px;
-      font-size: 14px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      background: #e6f4ff;
-      color: #0a376b;
-      font-weight: 600;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    button:hover { transform: translateY(-1px); }
-    button.active { background: #3ecf8e; color: #073d2d; }
-    .slider-group,
-    .select-group {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 8px 12px;
-      border-radius: 8px;
-    }
-    .slider-group label { font-size: 12px; }
-    input[type="range"] { width: 140px; }
-    select { padding: 6px 8px; border-radius: 6px; border: none; }
-    .panel {
-      margin-top: 16px;
-      width: min(1000px, 100%);
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .panel h3 { margin: 0 0 10px; }
-    .grid {
+      height: 100vh;
+      overflow: hidden;
+      background: var(--void);
+      color: var(--ink);
+      font: 13px/1.45 var(--sans);
+      -webkit-font-smoothing: antialiased;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) 316px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas: "rail rail" "stage aside" "bar bar";
     }
-    .stats { margin-top: 10px; font-size: 13px; opacity: 0.9; }
-    .legend { font-size: 12px; opacity: 0.9; }
-    textarea.settings-text {
-      width: 100%;
-      min-height: 140px;
-      background: rgba(0,0,0,0.35);
-      color: #e6f4ff;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-family: monospace;
-      font-size: 12px;
-      resize: vertical;
-      box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+
+    /* ---- status rail ------------------------------------------------ */
+    .rail {
+      grid-area: rail; display: flex; align-items: center; gap: 14px;
+      height: 54px; padding: 0 18px;
+      background: var(--panel); border-bottom: 1px solid var(--line);
     }
-    .settings-actions { display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
-    .settings-actions button { flex: 0 0 auto; }
-    .settings-error { color:#ffb3b3; font-size:12px; min-height:14px; margin-top:4px; }
+    .mark { font-size: 12px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+    .mark em { font-style: normal; font-weight: 400; color: var(--dim); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); flex: none; }
+    .dot.on { background: var(--ink); animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .2; } }
+    .readouts { margin-left: auto; display: flex; gap: 24px; }
+    .ro { text-align: right; }
+    .ro b {
+      display: block; font: 500 15px var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .ro i {
+      display: block; font-style: normal; font-size: 9px; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--dim); margin-top: 3px;
+    }
+
+    /* ---- stage ------------------------------------------------------ */
+    .stage {
+      grid-area: stage; display: grid; place-items: center;
+      padding: 20px; min-width: 0; min-height: 0;
+    }
+    .stage canvas {
+      grid-area: 1 / 1;                 /* both canvases stack in one cell */
+      max-width: 100%; max-height: 100%;
+      /* No frame, and the same black as the stage: the lattice floats instead of
+         sitting in a box that advertises how much of itself is empty. */
+      background: var(--void); cursor: crosshair;
+    }
+
+    /* ---- instrument panel ------------------------------------------- */
+    .aside {
+      grid-area: aside; overflow-y: auto; overscroll-behavior: contain;
+      background: var(--panel); border-left: 1px solid var(--line);
+    }
+    .sect { padding: 15px 16px; border-bottom: 1px solid var(--line); }
+    .sect h2 {
+      margin: 0 0 11px; font-size: 9px; font-weight: 600; color: var(--dim);
+      letter-spacing: .2em; text-transform: uppercase;
+    }
+    .note { color: var(--dim); font-size: 11px; margin: 10px 0 0; }
+    .note code { font-family: var(--mono); color: var(--ink); }
+
+    /* ---- controls ---------------------------------------------------- */
+    button { font: inherit; border-radius: 0; cursor: pointer; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+    .seg button {
+      background: var(--raise); color: var(--dim); border: 0;
+      padding: 8px 4px; font-size: 11px; transition: background .1s, color .1s;
+    }
+    .seg button:hover { color: var(--ink); }
+    .seg button[aria-pressed="true"] { background: var(--ink); color: var(--void); }
+
+    .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
+    .field > label, .field > .lbl { font-size: 11px; color: var(--dim); }
+    .seg.mini { width: 132px; }
+    .seg button:disabled { opacity: .3; cursor: not-allowed; }
+    .seg button:disabled:hover { color: var(--dim); }
+    select {
+      appearance: none; -webkit-appearance: none;
+      background-color: var(--raise); color: var(--ink);
+      border: 1px solid var(--line); border-radius: 0;
+      padding: 6px 22px 6px 8px; font: inherit; font-size: 11px; cursor: pointer;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+        linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+      background-position: right 10px top 13px, right 6px top 13px;
+      background-size: 4px 4px; background-repeat: no-repeat;
+    }
+
+    /* Parameter rows read as a bar chart: the track IS the value.
+       A transparent range input sits on top so the whole row is scrubbable. */
+    .par {
+      position: relative; height: 28px; margin-bottom: 2px;
+      /* Dim block for mass, a brighter rule along the bottom for precision.
+         The rule sits under the baseline so it never cuts through the label. */
+      background:
+        linear-gradient(90deg, var(--dim) 0 var(--fill, 0%), transparent var(--fill, 0%))
+          bottom / 100% 2px no-repeat,
+        linear-gradient(90deg, var(--bar) 0 var(--fill, 0%), #0E1014 var(--fill, 0%));
+      border: 1px solid transparent;
+    }
+    .par:hover { border-color: var(--line); }
+    .par:focus-within { border-color: var(--ink); }
+    .par > span {
+      position: absolute; inset: 0; padding: 0 9px; pointer-events: none;
+      display: flex; align-items: center; justify-content: space-between; font-size: 11px;
+    }
+    .par .k { color: var(--dim); }
+    .par .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .par input[type="range"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      margin: 0; opacity: 0; cursor: ew-resize;
+    }
+
+    /* Signature: the energy legend is the transparency control.
+       Stops are the literal band edges used by energyColor(). */
+    .ramp { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; height: 30px; background: var(--line); border: 1px solid var(--line); }
+    .ramp button { border: 0; padding: 0; font-size: 0; position: relative; }
+    .ramp button[data-band="low"]  { background: linear-gradient(90deg, #0078DC, #00F0DC); }
+    .ramp button[data-band="mid"]  { background: linear-gradient(90deg, #00FFDC, #FFFF28); }
+    .ramp button[data-band="high"] { background: linear-gradient(90deg, #FFFF28, #FF0028); }
+    .ramp button[data-band="max"]  { background: linear-gradient(90deg, #FF0064, #FFFFFF); }
+    .ramp button[aria-pressed="true"] { background: #0E1014; box-shadow: inset 0 0 0 1px var(--ink); }
+    .ramp button[aria-pressed="true"]::after {
+      content: "hidden"; position: absolute; inset: 0; display: grid; place-items: center;
+      font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink);
+    }
+    .rampkey { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 5px; }
+    .rampkey span { font: 9px var(--mono); color: var(--dim); text-align: center; }
+
+    .splist { margin-top: 11px; display: grid; gap: 5px; }
+    .splist div { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--dim); }
+    .splist .sw { width: 9px; height: 9px; flex: none; }
+    .splist b { margin-left: auto; font: 500 11px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+    .row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .presets { grid-template-columns: repeat(4, 1fr); margin-top: 11px; }
+    .sizes { grid-template-columns: repeat(4, 1fr); }
+    .sizes button { font-family: var(--mono); }
+    .wide { width: 100%; margin-top: 6px; text-align: center; }
+    .btn {
+      background: var(--raise); color: var(--ink); border: 1px solid var(--line);
+      padding: 7px 12px; font-size: 11px; transition: border-color .1s, background .1s;
+    }
+    .btn:hover { border-color: #39414E; }
+    .btn[aria-pressed="true"] { background: var(--ink); color: var(--void); border-color: var(--ink); }
+
+    /* ---- transport --------------------------------------------------- */
+    .bar {
+      grid-area: bar; display: flex; align-items: center; gap: 7px;
+      height: 56px; padding: 0 16px;
+      background: var(--panel); border-top: 1px solid var(--line);
+    }
+    .bar .btn { padding: 9px 14px; font-size: 12px; }
+    .bar .go { background: var(--ink); color: var(--void); border-color: var(--ink); min-width: 82px; }
+    .bar .par { width: 190px; margin: 0 0 0 auto; }
+    .hint { color: var(--dim); font-size: 10px; letter-spacing: .06em; }
+
+    /* ---- settings ---------------------------------------------------- */
+    summary {
+      cursor: pointer; list-style: none; font-size: 9px; font-weight: 600;
+      letter-spacing: .2em; text-transform: uppercase; color: var(--dim);
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+  "; }
+    details[open] summary::before { content: "\2013  "; }
+    textarea {
+      width: 100%; min-height: 140px; margin-top: 11px; padding: 8px;
+      background: #0E1014; color: var(--ink); border: 1px solid var(--line);
+      border-radius: 0; font: 11px/1.5 var(--mono); resize: vertical;
+    }
+    .err { font-size: 11px; color: #E8A0A0; min-height: 15px; margin-top: 9px; }
+
+    :focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dot.on { animation: none; }
+      * { transition: none !important; }
+    }
+    @media (max-width: 880px) {
+      body {
+        height: auto; min-height: 100vh; overflow: auto;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto auto auto;
+        grid-template-areas: "rail" "stage" "aside" "bar";
+      }
+      .aside { border-left: 0; border-top: 1px solid var(--line); }
+      .readouts { gap: 15px; }
+      .ro:nth-child(n+4) { display: none; }
+      /* Transport wraps instead of pushing the speed meter off-screen, and the
+         keyboard hint goes away where there is no keyboard. */
+      .bar { position: sticky; bottom: 0; flex-wrap: wrap; height: auto; padding: 10px 12px; }
+      .bar .hint { display: none; }
+      .bar .par { width: 100%; margin: 4px 0 0; }
+    }
   </style>
 </head>
 <body>
-  <h1>🧪 Hyperflux 3D Cellular Automata</h1>
-  <div class="subtitle">
-    Unpublished rule-set: a 3D energy lattice with anisotropic diffusion, temporal echo coupling,
-    parity-driven vortex spin, plane resonance, and portal wrap. Paint voxels and watch wavefronts
-    interfere across depth.
-  </div>
+  <header class="rail">
+    <span class="dot" id="liveDot"></span>
+    <span class="mark">Hyperflux <em>/ 3D automaton</em></span>
+    <div class="readouts">
+      <div class="ro"><b id="roGen">0</b><i>generation</i></div>
+      <div class="ro"><b id="roLive">0</b><i>live cells</i></div>
+      <div class="ro"><b id="roAvg">0.0</b><i>avg energy</i></div>
+      <div class="ro"><b id="roSize">32³</b><i>lattice</i></div>
+      <div class="ro"><b id="roMs">–</b><i>ms / gen</i></div>
+      <div class="ro"><b id="roBackend">CPU</b><i>compute</i></div>
+    </div>
+  </header>
 
-  <canvas id="canvas" width="960" height="640"></canvas>
-  <canvas id="glcanvas" width="960" height="640" style="display:none; position:absolute; top:0; left:0; pointer-events:auto; border:2px solid rgba(255,255,255,0.4);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.45);"></canvas>
+  <main class="stage">
+    <canvas id="canvas" width="960" height="760"></canvas>
+    <canvas id="glcanvas" width="960" height="760" style="display:none"></canvas>
+  </main>
 
-  <div class="controls">
-    <button id="startBtn">Start</button>
-    <button id="stopBtn">Stop</button>
-    <button id="stepBtn">Step</button>
-    <button id="clearBtn">Clear</button>
-    <button id="randomBtn">Random</button>
-    <div class="slider-group">
-      <label for="speedSlider">Speed: <span id="speedValue">10</span>/s</label>
-      <input type="range" id="speedSlider" min="1" max="60" value="10" />
-    </div>
-    <div class="slider-group">
-      <label for="voxelSizeSlider">Voxel Size: <span id="voxelSizeValue">14</span></label>
-      <input type="range" id="voxelSizeSlider" min="8" max="22" value="14" />
-    </div>
-    <div class="select-group">
-      <label for="renderMode">Render:</label>
-      <select id="renderMode">
-        <option value="iso">Isometric</option>
-        <option value="slice">Z-Slice</option>
-        <option value="depth">Depth Fog</option>
-        <option value="webgl3d">3D (WebGL)</option>
-      </select>
-    </div>
-    <!-- New transparency control -->
-    <div class="select-group">
-      <label for="transparentSelect">Transparent:</label>
-      <select id="transparentSelect">
-        <option value="none">None</option>
-        <option value="low">Low (&lt;50)</option>
-        <option value="mid">Mid (50-119)</option>
-        <option value="high">High (120-199)</option>
-        <option value="max">Max (>=200)</option>
-      </select>
-    </div>
-  </div>
+  <aside class="aside">
+    <section class="sect">
+      <h2>View</h2>
+      <div class="seg" id="renderSeg">
+        <button data-mode="iso" aria-pressed="true">Isometric</button>
+        <button data-mode="webgl3d" aria-pressed="false">Orbit 3D</button>
+        <button data-mode="slice" aria-pressed="false">Slice</button>
+        <button data-mode="depth" aria-pressed="false">Depth fog</button>
+      </div>
+      <div class="par" style="margin-top:10px">
+        <input type="range" id="voxelSizeSlider" min="3" max="22" value="14" aria-label="Voxel size" />
+        <span><span class="k">Voxel size</span><span class="v" id="voxelSizeValue">14</span></span>
+      </div>
+      <div class="field">
+        <label for="sliceAxisSelect">Slice plane</label>
+        <select id="sliceAxisSelect">
+          <option value="xy">XY · fix Z</option>
+          <option value="xz">XZ · fix Y</option>
+          <option value="yz">YZ · fix X</option>
+        </select>
+      </div>
+      <div class="par" style="margin-top:9px">
+        <input type="range" id="sliceIndexSlider" min="0" max="31" step="1" value="16" aria-label="Slice index" />
+        <span><span class="k">Depth</span><span class="v" id="sliceIndexValue">16</span></span>
+      </div>
+    </section>
 
-  <div class="panel">
-    <h3>⚙️ Rule Parameters</h3>
-    <div class="grid">
-      <div class="slider-group"><label for="baseDecay">Base Decay <span id="baseDecayValue">0.88</span></label><input type="range" id="baseDecay" min="0.6" max="0.98" step="0.01" value="0.88" /></div>
-      <div class="slider-group"><label for="echoWeight">Echo Weight <span id="echoWeightValue">0.35</span></label><input type="range" id="echoWeight" min="0" max="0.9" step="0.01" value="0.35" /></div>
-      <div class="slider-group"><label for="diffXY">Diffusion XY <span id="diffXYValue">0.20</span></label><input type="range" id="diffXY" min="0" max="0.5" step="0.01" value="0.20" /></div>
-      <div class="slider-group"><label for="diffZ">Diffusion Z <span id="diffZValue">0.12</span></label><input type="range" id="diffZ" min="0" max="0.5" step="0.01" value="0.12" /></div>
-      <div class="slider-group"><label for="resBoost">Resonance Boost <span id="resBoostValue">1.20</span></label><input type="range" id="resBoost" min="1.0" max="1.8" step="0.01" value="1.20" /></div>
-      <div class="slider-group"><label for="spin">Spin Coupling <span id="spinValue">0.15</span></label><input type="range" id="spin" min="0" max="0.4" step="0.01" value="0.15" /></div>
-      <div class="slider-group"><label for="birthTh">Birth Threshold <span id="birthThValue">85</span></label><input type="range" id="birthTh" min="30" max="200" step="1" value="85" /></div>
-      <div class="slider-group"><label for="activeTh">Active Threshold <span id="activeThValue">18</span></label><input type="range" id="activeTh" min="5" max="120" step="1" value="18" /></div>
-      <div class="slider-group"><label for="minEnergy">Min Energy <span id="minEnergyValue">8</span></label><input type="range" id="minEnergy" min="0" max="40" step="1" value="8" /></div>
+    <section class="sect">
+      <h2>Lattice</h2>
+      <div class="seg sizes" id="sizeSeg">
+        <button data-size="32" aria-pressed="true">32³</button>
+        <button data-size="48" aria-pressed="false">48³</button>
+        <button data-size="64" aria-pressed="false">64³</button>
+        <button data-size="80" aria-pressed="false">80³</button>
+      </div>
+      <p class="note" id="sizeNote"></p>
+      <div class="field">
+        <span class="lbl">Compute on</span>
+        <div class="seg mini" id="backendSeg">
+          <button data-backend="cpu" aria-pressed="true">CPU</button>
+          <button data-backend="gpu" aria-pressed="false" disabled title="Checking for WebGPU…">GPU</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="boundarySelect">Edges</label>
+        <select id="boundarySelect">
+          <option value="wrap">Wrap around</option>
+          <option value="reflect">Reflect</option>
+          <option value="absorb">Absorb</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="seedKind">Seed pattern</label>
+        <select id="seedKind">
+          <option value="random">Random</option>
+          <option value="sphere">Sphere shell</option>
+          <option value="plane">Plane</option>
+          <option value="filament">Filament</option>
+          <option value="symmetric">Symmetric</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="speciesSelect">Species</label>
+        <select id="speciesSelect">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </div>
+      <div class="field" id="paintField" style="display:none">
+        <label for="paintSpeciesSelect">Paint as</label>
+        <select id="paintSpeciesSelect">
+          <option value="0">Species 1</option>
+          <option value="1">Species 2</option>
+          <option value="2">Species 3</option>
+        </select>
+      </div>
+      <div class="splist" id="speciesLegend"></div>
+    </section>
+
+    <section class="sect">
+      <h2>Energy</h2>
+      <div class="ramp" id="ramp">
+        <button data-band="low"  aria-pressed="false" title="Hide low energy">Low</button>
+        <button data-band="mid"  aria-pressed="false" title="Hide mid energy">Mid</button>
+        <button data-band="high" aria-pressed="false" title="Hide high energy">High</button>
+        <button data-band="max"  aria-pressed="false" title="Hide saturated">Max</button>
+      </div>
+      <div class="rampkey"><span>0–49</span><span>50–119</span><span>120–199</span><span>200+</span></div>
+      <p class="note">Click a band to hide those cells and see through the field.</p>
+    </section>
+
+    <section class="sect">
+      <h2>Rule</h2>
+      <div class="par"><input type="range" id="baseDecay" min="0.6" max="0.98" step="0.01" value="0.88" aria-label="Decay" /><span><span class="k">Decay</span><span class="v" id="baseDecayValue">0.88</span></span></div>
+      <div class="par"><input type="range" id="echoWeight" min="0" max="0.9" step="0.01" value="0.35" aria-label="Echo" /><span><span class="k">Echo</span><span class="v" id="echoWeightValue">0.35</span></span></div>
+      <div class="par"><input type="range" id="diffXY" min="0" max="0.5" step="0.01" value="0.20" aria-label="Spread XY" /><span><span class="k">Spread XY</span><span class="v" id="diffXYValue">0.20</span></span></div>
+      <div class="par"><input type="range" id="diffZ" min="0" max="0.5" step="0.01" value="0.12" aria-label="Spread Z" /><span><span class="k">Spread Z</span><span class="v" id="diffZValue">0.12</span></span></div>
+      <div class="par"><input type="range" id="resBoost" min="1.0" max="1.8" step="0.01" value="1.20" aria-label="Resonance" /><span><span class="k">Resonance</span><span class="v" id="resBoostValue">1.20</span></span></div>
+      <div class="par"><input type="range" id="spin" min="0" max="0.4" step="0.01" value="0.15" aria-label="Spin" /><span><span class="k">Spin</span><span class="v" id="spinValue">0.15</span></span></div>
+      <div class="par"><input type="range" id="birthTh" min="30" max="200" step="1" value="85" aria-label="Birth" /><span><span class="k">Birth</span><span class="v" id="birthThValue">85</span></span></div>
+      <div class="par"><input type="range" id="activeTh" min="5" max="120" step="1" value="18" aria-label="Active" /><span><span class="k">Active</span><span class="v" id="activeThValue">18</span></span></div>
+      <div class="par"><input type="range" id="minEnergy" min="0" max="40" step="1" value="8" aria-label="Floor" /><span><span class="k">Floor</span><span class="v" id="minEnergyValue">8</span></span></div>
+      <div class="par"><input type="range" id="inhibit" min="0" max="1.5" step="0.01" value="0.60" aria-label="Rivalry" /><span><span class="k">Rivalry</span><span class="v" id="inhibitValue">0.60</span></span></div>
+      <div class="seg presets">
+        <button data-preset="default" aria-pressed="true">Default</button>
+        <button data-preset="waves" aria-pressed="false">Waves</button>
+        <button data-preset="vortex" aria-pressed="false">Vortex</button>
+        <button data-preset="chaos" aria-pressed="false">Chaos</button>
+      </div>
+      <button class="btn wide" id="randomizeAndShowBtn">Shuffle all rules</button>
+    </section>
+
+    <section class="sect">
+      <details>
+        <summary>Settings</summary>
+        <p class="note">Copy, edit, and re-apply the whole configuration. Changing lattice size or
+          species count reseeds the grid.</p>
+        <textarea id="settingsText" spellcheck="false"></textarea>
+        <div class="row">
+          <button class="btn" id="applySettingsBtn">Apply</button>
+          <button class="btn" id="copySettingsBtn">Copy</button>
+          <button class="btn" id="refreshSettingsBtn">Refresh</button>
+        </div>
+        <p class="note">Add <code>?selftest=1</code> to the URL to run the built-in checks.</p>
+      </details>
+      <div class="err" id="settingsError"></div>
+    </section>
+  </aside>
+
+  <footer class="bar">
+    <button class="btn go" id="runBtn">Run</button>
+    <button class="btn" id="stepBtn">Step</button>
+    <button class="btn" id="clearBtn">Clear</button>
+    <button class="btn" id="randomBtn">Reseed</button>
+    <span class="hint">Space to run · S to step · drag on the lattice to paint</span>
+    <div class="par">
+      <input type="range" id="speedSlider" min="1" max="60" value="10" aria-label="Speed" />
+      <span><span class="k">Speed</span><span class="v"><span id="speedValue">10</span>/s</span></span>
     </div>
-    <div class="controls" style="margin-top:10px">
-      <button onclick="loadPreset('default')">Default</button>
-      <button onclick="loadPreset('waves')">Waves</button>
-      <button onclick="loadPreset('vortex')">Vortex</button>
-      <button onclick="loadPreset('chaos')">Chaos</button>
-      <button onclick="randomizeParams()" style="background: linear-gradient(135deg,#61dafb,#3ecf8e); color:#042b36">🎲 Randomize</button>
-    </div>
-    <div class="legend">
-      Colors: deep-blue = low, cyan/yellow = mid, orange/red = high, white = saturated. Depth adds fog in some modes.
-    </div>
-    <div class="stats" id="stats">Gen: 0 | Active Voxels: 0 | Avg Energy: 0 | Size: 32×24×18</div>
-    <h3 style="margin-top:20px">🧩 Settings (JSON)</h3>
-    <p style="font-size:12px; opacity:0.85; margin-top:0;">You can copy, edit, and re-apply simulation settings. Modify params, speed, voxelSize, renderMode, or lattice size (NX, NY, NZ). Editing lattice size resets the grid.</p>
-    <textarea id="settingsText" class="settings-text" spellcheck="false"></textarea>
-    <div class="settings-actions">
-      <button id="applySettingsBtn">Apply JSON</button>
-      <button id="copySettingsBtn">Copy</button>
-      <button id="refreshSettingsBtn">Refresh</button>
-      <button id="randomizeAndShowBtn">Randomize Params + Show</button>
-    </div>
-    <div id="settingsError" class="settings-error"></div>
-  </div>
+  </footer>
 
   <script>
     // Hyperflux 3D Cellular Automata
@@ -199,6 +390,7 @@
 
     // Simulation lattice dimensions (x,y,z)
     let NX = 32, NY = 32, NZ = 32;
+    let N = NX * NY * NZ;            // cells per species
     let voxelSize = 14; // for rendering, not sim spacing
     let renderMode = 'iso';
     // WebGL camera state
@@ -207,10 +399,17 @@
     let isOrbiting = false;
     let lastMouse = {x:0,y:0};
 
-    // core fields
-    let grid = alloc3D(NX, NY, NZ, 0);
-    let prev = alloc3D(NX, NY, NZ, 0);
-    let echo = alloc3D(NX, NY, NZ, 0);
+    // Multi-species: every field is one flat Float32Array of length numSpecies*N.
+    // Species s owns the contiguous plane [s*N, (s+1)*N) -- keeps the 26-neighbour
+    // gather inside one plane, and makes numSpecies===1 byte-identical to the old
+    // single-field behaviour.
+    let numSpecies = 1;
+    let boundary = 'wrap';   // wrap | reflect | absorb
+    let seedKind = 'random';
+    let paintSpecies = 0;
+
+    // core fields: four ping-pong buffers, rotated (never copied) each step
+    let grid, prev, echo, next;
 
     // state
     let isRunning = false;
@@ -229,53 +428,86 @@
       spin: 0.15,
       birthTh: 85,
       activeTh: 18,
-      minEnergy: 8
+      minEnergy: 8,
+      inhibit: 0.60
     };
     // Transparency band selection
     let transparentBand = 'none';
 
-    function alloc3D(nx, ny, nz, fill) {
-      const A = new Array(nz);
-      for (let z = 0; z < nz; z++) {
-        const plane = new Array(ny);
-        for (let y = 0; y < ny; y++) {
-          const row = new Array(nx);
-          for (let x = 0; x < nx; x++) row[x] = fill;
-          plane[y] = row;
-        }
-        A[z] = plane;
-      }
-      return A;
+    const idx = (x, y, z) => (z * NY + y) * NX + x;
+
+    function allocFields() {
+      N = NX * NY * NZ;
+      const n = numSpecies * N;
+      grid = new Float32Array(n);
+      prev = new Float32Array(n);
+      echo = new Float32Array(n);
+      next = new Float32Array(n);
+      buildBoundaryTables();
+      generation = 0;
+      genMs = 0;        // the old timing says nothing about the new lattice
+      if (backend === 'gpu' && gpu.ok) gpuAllocate();
     }
 
-    function copy3D(src) {
-      const nz = src.length, ny = src[0].length, nx = src[0][0].length;
-      const A = new Array(nz);
-      for (let z = 0; z < nz; z++) {
-        const plane = new Array(ny);
-        for (let y = 0; y < ny; y++) plane[y] = src[z][y].slice();
-        A[z] = plane;
+    // Boundary lookup tables: index with (i+1) for i in [-1..L].
+    // Value is the resolved index, or -1 meaning "outside the lattice".
+    // ponytail: tables only cover a +/-1 stencil, which is all this rule reads.
+    // A wider kernel (Lenia, marching-cubes normals) would need L+2r entries.
+    let BX, BY, BZ;
+    function buildAxisTable(L) {
+      const t = new Int32Array(L + 2);
+      for (let i = -1; i <= L; i++) {
+        let v;
+        if (i >= 0 && i < L) v = i;
+        else if (boundary === 'wrap') v = (i + L) % L;
+        else if (boundary === 'reflect') v = i < 0 ? 0 : L - 1; // zero-flux mirror
+        else v = -1;                                            // absorb: void outside
+        t[i + 1] = v;
       }
-      return A;
+      return t;
+    }
+    function buildBoundaryTables() {
+      BX = buildAxisTable(NX);
+      BY = buildAxisTable(NY);
+      BZ = buildAxisTable(NZ);
     }
 
-    // Neighborhood helper (Moore in 3D, wrap portals)
-    function neighborsInfo(x, y, z) {
+    // Row addressing is hoisted out of the x loop: for a given (z,y) the nine
+    // (z+dz, y+dy) rows are resolved once, so the inner loop is pure array loads
+    // with no multiplies and no per-neighbour boundary math.
+    // rowBases[(dz+1)*3 + (dy+1)] = cell index of that row's x=0, or -1 if the row
+    // lies outside an absorbing boundary. Species offset is added by the caller.
+    const rowBases = new Int32Array(9);
+    function computeRowBases(z, y) {
+      const z0 = BZ[z], z2 = BZ[z + 2], y0 = BY[y], y2 = BY[y + 2];
+      rowBases[0] = (z0 < 0 || y0 < 0) ? -1 : (z0 * NY + y0) * NX;
+      rowBases[1] = (z0 < 0)           ? -1 : (z0 * NY + y ) * NX;
+      rowBases[2] = (z0 < 0 || y2 < 0) ? -1 : (z0 * NY + y2) * NX;
+      rowBases[3] = (y0 < 0)           ? -1 : (z  * NY + y0) * NX;
+      rowBases[4] =                           (z  * NY + y ) * NX;
+      rowBases[5] = (y2 < 0)           ? -1 : (z  * NY + y2) * NX;
+      rowBases[6] = (z2 < 0 || y0 < 0) ? -1 : (z2 * NY + y0) * NX;
+      rowBases[7] = (z2 < 0)           ? -1 : (z2 * NY + y ) * NX;
+      rowBases[8] = (z2 < 0 || y2 < 0) ? -1 : (z2 * NY + y2) * NX;
+    }
+
+    // Moore-26 gather for species plane `base`, using the rowBases already computed
+    // for this (z,y). x0/x2 are the resolved x-1 / x+1 columns (-1 = outside).
+    // Results land in scratch globals: 98k result objects per step was pure GC churn.
+    let nbActive = 0, nbTotal = 0;
+    function gather(base, x, x0, x2) {
       let active = 0, total = 0;
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0 && dz === 0) continue;
-            const xx = (x + dx + NX) % NX;
-            const yy = (y + dy + NY) % NY;
-            const zz = (z + dz + NZ) % NZ;
-            const e = grid[zz][yy][xx];
-            total += e;
-            if (e > params.activeTh) active++;
-          }
-        }
+      const th = params.activeTh;
+      for (let r = 0; r < 9; r++) {
+        const rb = rowBases[r];
+        if (rb < 0) continue;
+        const b = base + rb;
+        let e;
+        if (x0 >= 0) { e = grid[b + x0]; total += e; if (e > th) active++; }
+        if (r !== 4) { e = grid[b + x ]; total += e; if (e > th) active++; } // r===4 is the cell itself
+        if (x2 >= 0) { e = grid[b + x2]; total += e; if (e > th) active++; }
       }
-      return { active, total };
+      nbActive = active; nbTotal = total;
     }
 
     // Unpublished Hyperflux Rules (3D):
@@ -283,79 +515,109 @@
     // 2) Anisotropic Diffusion: stronger in XY than Z.
     // 3) Parity-Driven Vortex Spin: energy shifts along (dx,dy) based on cell parity and neighbor imbalance.
     // 4) Plane Resonance: if alignment across Z planes is near, amplify.
-    // 5) Portal Wrap: boundaries wrap; birth requires pattern energy signature and active count bands.
+    // 5) Boundary: wrap / reflect / absorb; birth requires an energy signature and active count band.
+    // 6) Species Inhibition: rival species suppress growth and block birth, producing territories.
     function step() {
-      const next = alloc3D(NX, NY, NZ, 0);
+      const { baseDecay, echoWeight, diffXY, diffZ, resBoost, spin,
+              birthTh, activeTh, minEnergy, inhibit } = params;
+      const echoDenom = 1 + echoWeight;
 
-      for (let z = 0; z < NZ; z++) {
-        for (let y = 0; y < NY; y++) {
-          for (let x = 0; x < NX; x++) {
-            const E = grid[z][y][x];
-            const Ee = echo[z][y][x];
-            const { active, total } = neighborsInfo(x, y, z);
+      for (let s = 0; s < numSpecies; s++) {
+        const base = s * N;
+        for (let z = 0; z < NZ; z++) {
+          for (let y = 0; y < NY; y++) {
+            computeRowBases(z, y);
+            const rCenter = rowBases[4], rYm = rowBases[3], rYp = rowBases[5],
+                  rZm = rowBases[1], rZp = rowBases[7];
+            for (let x = 0; x < NX; x++) {
+              const x0 = BX[x], x2 = BX[x + 2];
+              const i = rCenter + x;
+              const E = grid[base + i];
+              const Ee = echo[base + i];
+              gather(base, x, x0, x2);
+              const active = nbActive, total = nbTotal;
 
-            // Base mix and decay
-            const mix = (E + Ee * params.echoWeight) / (1 + params.echoWeight);
-            let val = mix * params.baseDecay;
+              // Base mix and decay
+              const mix = (E + Ee * echoWeight) / echoDenom;
+              let val = mix * baseDecay;
 
-            // Anisotropic diffusion: pull towards average neighbors, different XY/Z weights
-            const avgN = total / 26;
-            const neighborXY = (
-              grid[z][y][(x - 1 + NX) % NX] + grid[z][y][(x + 1) % NX] +
-              grid[z][(y - 1 + NY) % NY][x] + grid[z][(y + 1) % NY][x]
-            ) / 4;
-            const neighborZ = (
-              grid[(z - 1 + NZ) % NZ][y][x] + grid[(z + 1) % NZ][y][x]
-            ) / 2;
-            val += (neighborXY - E) * params.diffXY + (neighborZ - E) * params.diffZ;
+              // Anisotropic diffusion: pull towards average neighbors, different XY/Z weights
+              const avgN = total / 26;
+              const xm = x0 >= 0 ? grid[base + rCenter + x0] : 0;
+              const xp = x2 >= 0 ? grid[base + rCenter + x2] : 0;
+              const ym = rYm >= 0 ? grid[base + rYm + x] : 0;
+              const yp = rYp >= 0 ? grid[base + rYp + x] : 0;
+              const zm = rZm >= 0 ? grid[base + rZm + x] : 0;
+              const zp = rZp >= 0 ? grid[base + rZp + x] : 0;
+              const neighborXY = (xm + xp + ym + yp) / 4;
+              const neighborZ = (zm + zp) / 2;
+              val += (neighborXY - E) * diffXY + (neighborZ - E) * diffZ;
 
-            // Parity-driven vortex spin in XY:
-            // Compute local gradient bias and rotate energy around the cell depending on (x+y+z)%2
-            const parity = (x + y + z) & 1;
-            const gx = neighborXY - grid[z][y][(x - 1 + NX) % NX];
-            const gy = neighborXY - grid[z][(y - 1 + NY) % NY][x];
-            // spin direction: parity decides clockwise/counter-clockwise contribution
-            const spinDir = parity ? 1 : -1;
-            val += params.spin * spinDir * (gx - gy);
+              // Parity-driven vortex spin in XY:
+              // Compute local gradient bias and rotate energy around the cell depending on (x+y+z)%2
+              const parity = (x + y + z) & 1;
+              const gx = neighborXY - xm;
+              const gy = neighborXY - ym;
+              // spin direction: parity decides clockwise/counter-clockwise contribution
+              const spinDir = parity ? 1 : -1;
+              val += spin * spinDir * (gx - gy);
 
-            // Birth and survival bands using energy signature
-            // Energy signature based on neighbor sum mod segmented window, different bands for birth
-            let birthBoost = 0;
-            const signature = total % 120; // 3D band signature
-            if (E <= params.minEnergy) {
-              // birth if active in [3..6] or [10..12] and signature hits narrow windows
-              if ((active >= 3 && active <= 6 && signature > 50 && signature < 66) ||
-                  (active >= 10 && active <= 12 && signature > 95 && signature < 108)) {
-                birthBoost = params.birthTh + (signature % 20);
+              // Inter-species inhibition: rivals bleed this species' energy away.
+              // Rival pressure = their energy here, plus their 6-face average.
+              let rival = 0;
+              if (numSpecies > 1) {
+                for (let t = 0; t < numSpecies; t++) {
+                  if (t === s) continue;
+                  const tb = t * N;
+                  const faces = (
+                    (x0 >= 0 ? grid[tb + rCenter + x0] : 0) + (x2 >= 0 ? grid[tb + rCenter + x2] : 0) +
+                    (rYm >= 0 ? grid[tb + rYm + x] : 0) + (rYp >= 0 ? grid[tb + rYp + x] : 0) +
+                    (rZm >= 0 ? grid[tb + rZm + x] : 0) + (rZp >= 0 ? grid[tb + rZp + x] : 0)
+                  ) / 6;
+                  rival += grid[tb + i] * 0.5 + faces * 0.5;
+                }
+                val -= inhibit * rival;
               }
-            } else {
-              // survival amplification in balanced neighborhoods
-              if (active === 4 || active === 5 || active === 7) {
-                val += (avgN - E) * 0.15;
+
+              // Birth and survival bands using energy signature
+              // Energy signature based on neighbor sum mod segmented window, different bands for birth
+              let birthBoost = 0;
+              const signature = total % 120; // 3D band signature
+              if (E <= minEnergy) {
+                // birth if active in [3..6] or [10..12], signature hits narrow windows,
+                // and no rival already holds the cell
+                if (rival < activeTh &&
+                    ((active >= 3 && active <= 6 && signature > 50 && signature < 66) ||
+                     (active >= 10 && active <= 12 && signature > 95 && signature < 108))) {
+                  birthBoost = birthTh + (signature % 20);
+                }
+              } else {
+                // survival amplification in balanced neighborhoods
+                if (active === 4 || active === 5 || active === 7) {
+                  val += (avgN - E) * 0.15;
+                }
               }
+
+              // Plane resonance: if energies across z-1, z, z+1 are aligned within small delta, boost
+              if (Math.abs(E - zm) < 14 && Math.abs(E - zp) < 14 && E > 30) {
+                val *= resBoost;
+              }
+
+              // Apply birth boost if triggered
+              if (birthBoost > 0) val = Math.max(val, birthBoost);
+
+              // Clamp and threshold
+              val = Math.max(0, Math.min(255, val));
+              next[base + i] = val > minEnergy ? val : 0;
             }
-
-            // Plane resonance: if energies across z-1, z, z+1 are aligned within small delta, boost
-            const Ezm = grid[(z - 1 + NZ) % NZ][y][x];
-            const Ezp = grid[(z + 1) % NZ][y][x];
-            if (Math.abs(E - Ezm) < 14 && Math.abs(E - Ezp) < 14 && E > 30) {
-              val *= params.resBoost;
-            }
-
-            // Apply birth boost if triggered
-            if (birthBoost > 0) val = Math.max(val, birthBoost);
-
-            // Clamp and threshold
-            val = Math.max(0, Math.min(255, val));
-            next[z][y][x] = val > params.minEnergy ? val : 0;
           }
         }
       }
 
-      // Temporal memory update (echo = t-2)
-      echo = copy3D(prev);
-      prev = copy3D(grid);
-      grid = next;
+      // Temporal memory update (echo = t-2). Buffers rotate; the stale echo buffer
+      // becomes the next scratch target, so a step allocates nothing.
+      const spare = echo;
+      echo = prev; prev = grid; grid = next; next = spare;
       generation++;
     }
 
@@ -370,7 +632,7 @@
       else if (renderMode === 'slice') {
         glCanvas.style.display = 'none';
         canvas.style.display = 'block';
-        drawSlice(Math.floor(NZ / 2));
+        drawSlice();
       }
       else if (renderMode === 'depth') {
         glCanvas.style.display = 'none';
@@ -383,12 +645,34 @@
       updateStats();
     }
 
-    function energyColor(e, z = 0) {
+    // Per-species base hues, used only when numSpecies > 1.
+    const SPECIES_RGB = [[40, 170, 255], [255, 70, 170], [110, 255, 120]];
+
+    // Dominant species at flat cell index i -> scratch globals (no per-voxel alloc).
+    let domS = 0, domE = 0;
+    function dominantAt(i) {
+      domS = 0; domE = grid[i];
+      for (let s = 1; s < numSpecies; s++) {
+        const e = grid[s * N + i];
+        if (e > domE) { domE = e; domS = s; }
+      }
+    }
+
+    function energyColor(e, z = 0, s = 0) {
       if (e <= 0) return null;
       if (isTransparent(e)) return null;
       // Map energy to color; optional z affects fogging in depth mode
       let r, g, b;
-      if (e < 50) { // deep-blue to cyan
+      if (numSpecies > 1) {
+        // Hue is fixed per species; energy drives brightness, whitening at saturation.
+        const bc = SPECIES_RGB[s % SPECIES_RGB.length];
+        const t = Math.min(1, e / 255);
+        const k = 0.28 + 0.72 * t;
+        const w = Math.max(0, (t - 0.82) / 0.18);
+        r = Math.round(bc[0] * k + (255 - bc[0] * k) * w);
+        g = Math.round(bc[1] * k + (255 - bc[1] * k) * w);
+        b = Math.round(bc[2] * k + (255 - bc[2] * k) * w);
+      } else if (e < 50) { // deep-blue to cyan
         const t = e / 50;
         r = 0; g = Math.floor(120 + t * 120); b = 220;
       } else if (e < 120) { // cyan to yellow
@@ -419,16 +703,23 @@
       }
     }
 
-    // Isometric voxel projection (simple diamond projection)
+    // Isometric voxel projection (simple diamond projection).
+    // The diamond is (NX+NY) wide and (NX+NY)/2 + NZ*0.6 tall in voxel units, so
+    // the origin is derived from that rather than pinned, or the lattice hangs off
+    // the bottom of the canvas at larger voxel sizes.
+    function isoOriginY() {
+      const spanY = (NX + NY) * (voxelSize * 0.5) + NZ * (voxelSize * 0.6);
+      return Math.max(voxelSize, (canvas.height - spanY) / 2);
+    }
     function drawIsometric() {
-      const originX = canvas.width / 2;
-      const originY = 100;
       const s = voxelSize;
+      const originX = canvas.width / 2;
+      const originY = isoOriginY();
       for (let z = 0; z < NZ; z++) {
         for (let y = 0; y < NY; y++) {
           for (let x = 0; x < NX; x++) {
-            const e = grid[z][y][x];
-            const col = energyColor(e, z);
+            dominantAt(idx(x, y, z));
+            const col = energyColor(domE, z, domS);
             if (!col) continue;
             const isoX = originX + (x - y) * s;
             const isoY = originY + (x + y) * (s * 0.5) + z * (s * 0.6);
@@ -440,20 +731,43 @@
       }
     }
 
-    function drawSlice(zIndex) {
+    // Slice plane addressing: (u,v) are the two free axes, k the fixed one.
+    let sliceAxis = 'xy';
+    let sliceIndex = Math.floor(NZ / 2);
+
+    function sliceDepth() {
+      return sliceAxis === 'xy' ? NZ : sliceAxis === 'xz' ? NY : NX;
+    }
+    function sliceUV() {
+      if (sliceAxis === 'xy') return [NX, NY];
+      if (sliceAxis === 'xz') return [NX, NZ];
+      return [NY, NZ]; // yz
+    }
+    function sliceIdx(u, v, k) {
+      if (sliceAxis === 'xy') return idx(u, v, k);
+      if (sliceAxis === 'xz') return idx(u, k, v);
+      return idx(k, u, v); // yz
+    }
+
+    function drawSlice() {
       const s = voxelSize;
       const startX = 20, startY = 60;
+      const [uN, vN] = sliceUV();
+      const k = Math.max(0, Math.min(sliceIndex, sliceDepth() - 1));
       ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-      for (let y = 0; y < NY; y++) {
-        for (let x = 0; x < NX; x++) {
-          const e = grid[zIndex][y][x];
-          const col = energyColor(e, zIndex);
+      for (let v = 0; v < vN; v++) {
+        for (let u = 0; u < uN; u++) {
+          dominantAt(sliceIdx(u, v, k));
+          const col = energyColor(domE, k, domS);
           if (!col) continue;
           ctx.fillStyle = col;
-          ctx.fillRect(startX + x * s, startY + y * s, s - 2, s - 2);
+          ctx.fillRect(startX + u * s, startY + v * s, s - 2, s - 2);
         }
       }
-      ctx.strokeRect(startX - 2, startY - 2, NX * s + 4, NY * s + 4);
+      ctx.strokeRect(startX - 2, startY - 2, uN * s + 4, vN * s + 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = '13px sans-serif';
+      ctx.fillText(`${sliceAxis.toUpperCase()} plane @ ${k} / ${sliceDepth() - 1}`, startX, startY - 12);
     }
 
     function drawDepthFog() {
@@ -463,8 +777,8 @@
       for (let z = NZ - 1; z >= 0; z--) {
         for (let y = 0; y < NY; y++) {
           for (let x = 0; x < NX; x++) {
-            const e = grid[z][y][x];
-            const col = energyColor(e, z);
+            dominantAt(idx(x, y, z));
+            const col = energyColor(domE, z, domS);
             if (!col) continue;
             const px = startX + x * (s - 4) + Math.floor(z * 0.35 * s);
             const py = startY + y * (s - 4) + Math.floor(z * 0.35 * s);
@@ -475,18 +789,31 @@
       }
     }
 
+    let lastLegendHTML = null;
     function updateStats() {
       let active = 0, total = 0;
-      for (let z = 0; z < NZ; z++) {
-        for (let y = 0; y < NY; y++) {
-          for (let x = 0; x < NX; x++) {
-            const e = grid[z][y][x];
-            if (e > 0) { active++; total += e; }
-          }
-        }
+      const perSpecies = new Array(numSpecies).fill(0);
+      for (let i = 0; i < N; i++) {
+        dominantAt(i);
+        if (domE > 0) { active++; total += domE; perSpecies[domS]++; }
       }
-      const avg = active ? (total / active).toFixed(1) : 0;
-      document.getElementById('stats').textContent = `Gen: ${generation} | Active Voxels: ${active} | Avg Energy: ${avg} | Size: ${NX}×${NY}×${NZ}`;
+      const set = (id, v) => { document.getElementById(id).textContent = v; };
+      set('roGen', generation.toLocaleString());
+      set('roLive', active.toLocaleString());
+      set('roAvg', active ? (total / active).toFixed(1) : '0.0');
+      set('roSize', (NX === NY && NY === NZ) ? NX + '³' : `${NX}·${NY}·${NZ}`);
+      set('roMs', genMs ? genMs.toFixed(1) : '–');
+
+      // Per-species tally, only when there is competition to report.
+      const html = numSpecies > 1
+        ? perSpecies.map((c, s) =>
+            `<div><span class="sw" style="background:rgb(${SPECIES_RGB[s].join(',')})"></span>` +
+            `Species ${s + 1}<b>${c.toLocaleString()}</b></div>`).join('')
+        : '';
+      if (html !== lastLegendHTML) {
+        document.getElementById('speciesLegend').innerHTML = html;
+        lastLegendHTML = html;
+      }
       // Show hint if in WebGL mode and nothing visible
       if (renderMode === 'webgl3d' && active === 0) {
         document.getElementById('settingsError').textContent = 'No active voxels to render in 3D. Paint or Randomize.';
@@ -497,7 +824,6 @@
 
     // Interaction: paint voxels with max energy, drag moves across XY on current depth slice
     let isPainting = false;
-    let paintZ = Math.floor(NZ / 2);
 
     canvas.addEventListener('mousedown', (e) => { isPainting = true; paintAt(e); });
     canvas.addEventListener('mousemove', (e) => { if (isPainting) paintAt(e); });
@@ -505,16 +831,22 @@
     canvas.addEventListener('mouseleave', () => { isPainting = false; });
 
     function paintAt(e) {
+      // The canvas is CSS-scaled to fit the stage, so pointer coords have to be
+      // mapped back into the backing store before they mean anything.
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const ps = Math.min(paintSpecies, numSpecies - 1) * N;
       if (renderMode === 'slice') {
         const s = voxelSize;
         const startX = 20, startY = 60;
-        const gx = Math.floor((x - startX) / s);
-        const gy = Math.floor((y - startY) / s);
-        if (gx >= 0 && gx < NX && gy >= 0 && gy < NY) {
-          grid[paintZ][gy][gx] = 255;
+        const [uN, vN] = sliceUV();
+        const gu = Math.floor((x - startX) / s);
+        const gv = Math.floor((y - startY) / s);
+        if (gu >= 0 && gu < uN && gv >= 0 && gv < vN) {
+          const k = Math.max(0, Math.min(sliceIndex, sliceDepth() - 1));
+          grid[ps + sliceIdx(gu, gv, k)] = 255;
+          gpuDirty = true;
           draw();
         }
       } else {
@@ -522,8 +854,11 @@
         // This is a simple heuristic to keep interaction usable.
         const s = voxelSize;
         const originX = canvas.width / 2;
-        const originY = 100;
-        // try multiple z layers near paintZ to find closest pixel
+        const originY = isoOriginY();
+        // try multiple z layers near the working depth to find closest pixel
+        const paintZ = sliceAxis === 'xy'
+          ? Math.max(0, Math.min(sliceIndex, NZ - 1))
+          : Math.floor(NZ / 2);
         let best = null;
         for (let z = Math.max(0, paintZ - 2); z <= Math.min(NZ - 1, paintZ + 2); z++) {
           for (let yy = 0; yy < NY; yy += 2) {
@@ -540,53 +875,197 @@
           for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
             const xx = Math.min(NX - 1, best.x + dx);
             const yy = Math.min(NY - 1, best.y + dy);
-            grid[best.z][yy][xx] = 255;
+            grid[ps + idx(xx, yy, best.z)] = 255;
           }
+          gpuDirty = true;
           draw();
         }
       }
     }
 
     // Controls
-    document.getElementById('startBtn').addEventListener('click', () => {
-      if (!isRunning) {
-        isRunning = true;
-        document.getElementById('startBtn').classList.add('active');
-        document.getElementById('stopBtn').classList.remove('active');
+    const runBtn = document.getElementById('runBtn');
+    function setRunning(on) {
+      isRunning = on;
+      runBtn.textContent = on ? 'Pause' : 'Run';
+      document.getElementById('liveDot').classList.toggle('on', on);
+      if (on) {
         lastTime = performance.now();
         rafId = requestAnimationFrame(loop);
+      } else if (rafId) {
+        cancelAnimationFrame(rafId);
       }
-    });
-    document.getElementById('stopBtn').addEventListener('click', () => {
-      isRunning = false;
-      if (rafId) cancelAnimationFrame(rafId);
-      document.getElementById('startBtn').classList.remove('active');
-      document.getElementById('stopBtn').classList.add('active');
-    });
-    document.getElementById('stepBtn').addEventListener('click', () => { step(); draw(); });
+    }
+    runBtn.addEventListener('click', () => setRunning(!isRunning));
+    document.getElementById('stepBtn').addEventListener('click', timedGeneration);
     document.getElementById('clearBtn').addEventListener('click', () => { clearAll(); draw(); });
-    document.getElementById('randomBtn').addEventListener('click', () => { randomFill(0.12); draw(); });
+
+    document.addEventListener('keydown', (e) => {
+      // e.target is Document when nothing is focused, and Document has no closest()
+      const t = e.target;
+      if (t instanceof Element && t.closest('input, textarea, select')) return;
+      if (e.code === 'Space') { e.preventDefault(); setRunning(!isRunning); }
+      else if (e.key === 's' || e.key === 'S') { step(); draw(); }
+    });
+
+    // Fill the bar behind a parameter row so the track reads as its own value.
+    function setFill(el) {
+      const min = parseFloat(el.min), max = parseFloat(el.max);
+      const pct = max > min ? ((parseFloat(el.value) - min) / (max - min)) * 100 : 0;
+      el.parentElement.style.setProperty('--fill', pct.toFixed(2) + '%');
+    }
+    function refreshFills() {
+      document.querySelectorAll('.par input[type="range"]').forEach(setFill);
+    }
+
+    function setRenderMode(m) {
+      renderMode = m;
+      for (const b of document.querySelectorAll('#renderSeg button')) {
+        b.setAttribute('aria-pressed', String(b.dataset.mode === m));
+      }
+      if (m === 'webgl3d') ensureWebGL();
+    }
+    for (const b of document.querySelectorAll('#renderSeg button')) {
+      b.addEventListener('click', () => { setRenderMode(b.dataset.mode); draw(); refreshSettingsText(); });
+    }
+
+    function setTransparentBand(band) {
+      transparentBand = band;
+      for (const b of document.querySelectorAll('#ramp button')) {
+        b.setAttribute('aria-pressed', String(b.dataset.band === band));
+      }
+    }
+    for (const b of document.querySelectorAll('#ramp button')) {
+      // clicking the active band clears it, so the ramp is its own off switch
+      b.addEventListener('click', () => {
+        setTransparentBand(transparentBand === b.dataset.band ? 'none' : b.dataset.band);
+        draw();
+        refreshSettingsText();
+      });
+    }
+
+    // "Paint as" only means anything once a second species exists.
+    function syncSpeciesUI() {
+      document.getElementById('paintField').style.display = numSpecies > 1 ? '' : 'none';
+    }
+
+    // Largest voxel size whose isometric diamond still fits the canvas. Without
+    // this an 80³ lattice draws well past the edges at any slider value.
+    function fitVoxelSize() {
+      const byW = canvas.width / (NX + NY);
+      const byH = canvas.height / ((NX + NY) * 0.5 + NZ * 0.6);
+      return Math.max(3, Math.min(22, Math.floor(Math.min(byW, byH))));
+    }
+
+    function syncSizeUI() {
+      const cube = (NX === NY && NY === NZ) ? NX : 0;
+      for (const b of document.querySelectorAll('#sizeSeg button')) {
+        b.setAttribute('aria-pressed', String(+b.dataset.size === cube));
+      }
+      const mb = (4 * numSpecies * N * 4) / 1048576;   // 4 buffers, 4 bytes a cell
+      document.getElementById('sizeNote').textContent =
+        `${N.toLocaleString()} cells · ${mb.toFixed(1)} MB`;
+    }
+
+    function setLattice(n) {
+      NX = NY = NZ = n;
+      allocFields();
+      seed(seedKind);
+      sliceIndex = Math.floor(n / 2);
+      // scale the voxels to the new lattice so the view stays framed
+      voxelSize = fitVoxelSize();
+      const vs = document.getElementById('voxelSizeSlider');
+      vs.value = voxelSize;
+      document.getElementById('voxelSizeValue').textContent = voxelSize;
+      setFill(vs);
+      syncSliceUI();
+      syncSizeUI();
+    }
+
+    for (const b of document.querySelectorAll('#sizeSeg button')) {
+      b.addEventListener('click', () => { setLattice(+b.dataset.size); draw(); refreshSettingsText(); });
+    }
+
+    // Rolling cost of one generation, measured here rather than quoted, because
+    // it depends entirely on the machine this is running on.
+    let genMs = 0;
+    let inFlight = false;
+    async function timedGeneration() {
+      if (inFlight) return;          // a GPU generation is still resolving
+      inFlight = true;
+      const t0 = performance.now();
+      try {
+        if (backend === 'gpu' && gpu.ok) await gpuStep();
+        else step();
+        draw();
+      } finally {
+        const dt = performance.now() - t0;
+        genMs = genMs ? genMs * 0.8 + dt * 0.2 : dt;
+        inFlight = false;
+      }
+    }
+    document.getElementById('randomBtn').addEventListener('click', () => { seed(seedKind); draw(); });
+
+    document.getElementById('seedKind').addEventListener('change', (e) => {
+      seedKind = e.target.value;
+      seed(seedKind);
+      draw();
+      refreshSettingsText();
+    });
+    document.getElementById('boundarySelect').addEventListener('change', (e) => {
+      boundary = e.target.value;
+      buildBoundaryTables();
+      draw();
+      refreshSettingsText();
+    });
+    document.getElementById('speciesSelect').addEventListener('change', (e) => {
+      numSpecies = parseInt(e.target.value, 10);
+      allocFields();      // buffer length depends on species count
+      seed(seedKind);
+      syncSpeciesUI();
+      syncSizeUI();       // memory figure scales with species
+      draw();
+      refreshSettingsText();
+    });
+    document.getElementById('paintSpeciesSelect').addEventListener('change', (e) => {
+      paintSpecies = parseInt(e.target.value, 10);
+    });
+    document.getElementById('sliceAxisSelect').addEventListener('change', (e) => {
+      sliceAxis = e.target.value;
+      syncSliceUI();
+      draw();
+      refreshSettingsText();
+    });
+    document.getElementById('sliceIndexSlider').addEventListener('input', (e) => {
+      sliceIndex = parseInt(e.target.value, 10);
+      document.getElementById('sliceIndexValue').textContent = sliceIndex;
+      setFill(e.target);
+      draw();
+      refreshSettingsText();
+    });
+
+    // Keep the slice slider's range matched to the current fixed axis.
+    function syncSliceUI() {
+      const sl = document.getElementById('sliceIndexSlider');
+      const max = sliceDepth() - 1;
+      sl.max = max;
+      if (sliceIndex > max) sliceIndex = max;
+      sl.value = sliceIndex;
+      setFill(sl);
+      document.getElementById('sliceIndexValue').textContent = sliceIndex;
+      document.getElementById('sliceAxisSelect').value = sliceAxis;
+    }
 
     document.getElementById('speedSlider').addEventListener('input', (e) => {
       speed = parseInt(e.target.value, 10);
       document.getElementById('speedValue').textContent = speed;
+      setFill(e.target);
       refreshSettingsText();
     });
     document.getElementById('voxelSizeSlider').addEventListener('input', (e) => {
       voxelSize = parseInt(e.target.value, 10);
       document.getElementById('voxelSizeValue').textContent = voxelSize;
-      draw();
-      refreshSettingsText();
-    });
-    document.getElementById('renderMode').addEventListener('change', (e) => {
-      renderMode = e.target.value;
-      if (renderMode === 'webgl3d') ensureWebGL();
-      draw();
-      refreshSettingsText();
-    });
-    const transparentSelect = document.getElementById('transparentSelect');
-    transparentSelect.addEventListener('change', (e)=>{
-      transparentBand = e.target.value;
+      setFill(e.target);
       draw();
       refreshSettingsText();
     });
@@ -598,6 +1077,7 @@
         const v = el.type === 'range' ? parseFloat(e.target.value) : e.target.value;
         params[key] = el.type === 'range' ? v : params[key];
         label.textContent = (typeof v === 'number') ? (el.step && parseFloat(el.step) < 1 ? v.toFixed(2) : v) : fmt(v);
+        setFill(el);
         refreshSettingsText();
       });
     };
@@ -610,14 +1090,15 @@
     bind('birthTh', 'birthTh');
     bind('activeTh', 'activeTh');
     bind('minEnergy', 'minEnergy');
+    bind('inhibit', 'inhibit');
 
     // Presets and randomizer
     function loadPreset(name) {
       let p;
-      if (name === 'default') p = { baseDecay: 0.88, echoWeight: 0.35, diffXY: 0.20, diffZ: 0.12, resBoost: 1.20, spin: 0.15, birthTh: 85, activeTh: 18, minEnergy: 8 };
-      else if (name === 'waves') p = { baseDecay: 0.92, echoWeight: 0.55, diffXY: 0.12, diffZ: 0.10, resBoost: 1.35, spin: 0.08, birthTh: 90, activeTh: 20, minEnergy: 6 };
-      else if (name === 'vortex') p = { baseDecay: 0.84, echoWeight: 0.25, diffXY: 0.24, diffZ: 0.16, resBoost: 1.25, spin: 0.28, birthTh: 95, activeTh: 16, minEnergy: 8 };
-      else if (name === 'chaos') p = { baseDecay: 0.78, echoWeight: 0.40, diffXY: 0.30, diffZ: 0.22, resBoost: 1.45, spin: 0.32, birthTh: 110, activeTh: 14, minEnergy: 5 };
+      if (name === 'default') p = { baseDecay: 0.88, echoWeight: 0.35, diffXY: 0.20, diffZ: 0.12, resBoost: 1.20, spin: 0.15, birthTh: 85, activeTh: 18, minEnergy: 8, inhibit: 0.60 };
+      else if (name === 'waves') p = { baseDecay: 0.92, echoWeight: 0.55, diffXY: 0.12, diffZ: 0.10, resBoost: 1.35, spin: 0.08, birthTh: 90, activeTh: 20, minEnergy: 6, inhibit: 0.45 };
+      else if (name === 'vortex') p = { baseDecay: 0.84, echoWeight: 0.25, diffXY: 0.24, diffZ: 0.16, resBoost: 1.25, spin: 0.28, birthTh: 95, activeTh: 16, minEnergy: 8, inhibit: 0.70 };
+      else if (name === 'chaos') p = { baseDecay: 0.78, echoWeight: 0.40, diffXY: 0.30, diffZ: 0.22, resBoost: 1.45, spin: 0.32, birthTh: 110, activeTh: 14, minEnergy: 5, inhibit: 0.95 };
       params = { ...params, ...p };
       syncParamUI();
     }
@@ -633,7 +1114,8 @@
         spin: +rnd(0.05, 0.35).toFixed(2),
         birthTh: Math.floor(rnd(60, 160)),
         activeTh: Math.floor(rnd(8, 40)),
-        minEnergy: Math.floor(rnd(0, 20))
+        minEnergy: Math.floor(rnd(0, 20)),
+        inhibit: +rnd(0.2, 1.2).toFixed(2)
       };
       if (p.diffZ > p.diffXY) p.diffZ = +(p.diffXY - 0.02).toFixed(2);
       params = { ...params, ...p };
@@ -646,6 +1128,7 @@
         const label = document.getElementById(id + 'Value');
         el.value = v;
         label.textContent = (typeof v === 'number') ? ((el.step && parseFloat(el.step) < 1) ? (+v).toFixed(2) : v) : fmt(v);
+        setFill(el);
       };
       set('baseDecay', params.baseDecay);
       set('echoWeight', params.echoWeight);
@@ -656,6 +1139,7 @@
       set('birthTh', params.birthTh);
       set('activeTh', params.activeTh);
       set('minEnergy', params.minEnergy);
+      set('inhibit', params.inhibit);
       refreshSettingsText();
     }
 
@@ -663,6 +1147,11 @@
     function getSettingsObject() {
       return {
         NX, NY, NZ,
+        numSpecies,
+        boundary,
+        seedKind,
+        sliceAxis,
+        sliceIndex,
         speed,
         voxelSize,
         renderMode,
@@ -681,10 +1170,29 @@
       errEl.textContent = '';
       try {
         const obj = JSON.parse(ta.value);
+        let needsRealloc = false;
         if (obj.NX && obj.NY && obj.NZ && (obj.NX !== NX || obj.NY !== NY || obj.NZ !== NZ)) {
           NX = obj.NX; NY = obj.NY; NZ = obj.NZ;
-          clearAll();
+          needsRealloc = true;
         }
+        if (obj.numSpecies && obj.numSpecies !== numSpecies) {
+          numSpecies = Math.max(1, Math.min(3, obj.numSpecies));
+          document.getElementById('speciesSelect').value = String(numSpecies);
+          needsRealloc = true;
+        }
+        if (obj.boundary && obj.boundary !== boundary) {
+          boundary = obj.boundary;
+          document.getElementById('boundarySelect').value = boundary;
+          buildBoundaryTables();
+        }
+        if (obj.seedKind) {
+          seedKind = obj.seedKind;
+          document.getElementById('seedKind').value = seedKind;
+        }
+        if (needsRealloc) { allocFields(); seed(seedKind); }
+        if (obj.sliceAxis) sliceAxis = obj.sliceAxis;
+        if (typeof obj.sliceIndex === 'number') sliceIndex = obj.sliceIndex;
+        syncSliceUI();
         if (obj.params) {
           params = { ...params, ...obj.params };
           syncParamUI();
@@ -701,23 +1209,30 @@
           const vs = document.getElementById('voxelSizeSlider');
           vs.value = voxelSize; document.getElementById('voxelSizeValue').textContent = voxelSize;
         }
-        if (obj.renderMode) {
-          renderMode = obj.renderMode;
-          const rm = document.getElementById('renderMode');
-          rm.value = renderMode;
-          if (renderMode === 'webgl3d') ensureWebGL();
-        }
-        if (obj.transparentBand) {
-          transparentBand = obj.transparentBand;
-          const ts = document.getElementById('transparentSelect');
-          if (ts) ts.value = transparentBand;
-        }
+        if (obj.renderMode) setRenderMode(obj.renderMode);
+        if (obj.transparentBand) setTransparentBand(obj.transparentBand);
+        syncSpeciesUI();
+        syncSizeUI();
+        refreshFills();
         draw();
         refreshSettingsText();
       } catch (e) {
         errEl.textContent = 'Invalid JSON: ' + e.message;
       }
     }
+
+    // Preset buttons
+    const presetBtns = document.querySelectorAll('[data-preset]');
+    for (const b of presetBtns) {
+      b.addEventListener('click', () => {
+        loadPreset(b.dataset.preset);
+        for (const o of presetBtns) o.setAttribute('aria-pressed', String(o === b));
+        draw();
+      });
+    }
+    document.getElementById('randomizeAndShowBtn').addEventListener('click', () => {
+      for (const o of presetBtns) o.setAttribute('aria-pressed', 'false');
+    });
 
     // Settings buttons
     document.getElementById('applySettingsBtn').addEventListener('click', applySettingsFromText);
@@ -738,8 +1253,7 @@
       if (!isRunning) return;
       const interval = 1000 / speed;
       if (ts - lastTime >= interval) {
-        step();
-        draw();
+        timedGeneration();
         lastTime = ts;
       }
       rafId = requestAnimationFrame(loop);
@@ -747,22 +1261,355 @@
 
     // Utilities
     function clearAll() {
-      grid = alloc3D(NX, NY, NZ, 0);
-      prev = alloc3D(NX, NY, NZ, 0);
-      echo = alloc3D(NX, NY, NZ, 0);
+      grid.fill(0); prev.fill(0); echo.fill(0); next.fill(0);
       generation = 0;
+      if (backend === 'gpu' && gpu.ok) gpuReset();
     }
 
-    function randomFill(prob = 0.1) {
+    // Seed patterns. All write into `grid` only; echo/prev stay zero so the first
+    // couple of generations build their own temporal memory.
+    function seed(kind = 'random') {
       clearAll();
-      for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
-        if (Math.random() < prob) grid[z][y][x] = Math.floor(60 + Math.random() * 195);
+      const S = numSpecies;
+      const put = (x, y, z, s) => {
+        x = Math.round(x); y = Math.round(y); z = Math.round(z);
+        if (x < 0 || y < 0 || z < 0 || x >= NX || y >= NY || z >= NZ) return;
+        grid[s * N + idx(x, y, z)] = 60 + Math.random() * 195;
+      };
+      const cx = (NX - 1) / 2, cy = (NY - 1) / 2, cz = (NZ - 1) / 2;
+
+      if (kind === 'sphere') {
+        // Hollow shell; species split by azimuth so they start as wedges.
+        const R = Math.min(NX, NY, NZ) * 0.35;
+        for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+          if (Math.abs(Math.hypot(x - cx, y - cy, z - cz) - R) > 0.9) continue;
+          const ang = Math.atan2(y - cy, x - cx) + Math.PI;
+          put(x, y, z, Math.min(S - 1, Math.floor(ang / (2 * Math.PI) * S)));
+        }
+      } else if (kind === 'plane') {
+        // One noisy mid-plane; energy has to spread along Z to fill the volume.
+        const z = Math.floor(cz);
+        for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+          if (Math.random() < 0.55) put(x, y, z, Math.floor(Math.random() * S));
+        }
+      } else if (kind === 'filament') {
+        // One random walk per species, thickened so it survives the decay term.
+        const steps = NX * 6;
+        for (let s = 0; s < S; s++) {
+          let x = Math.random() * NX, y = Math.random() * NY, z = Math.random() * NZ;
+          for (let i = 0; i < steps; i++) {
+            put(x, y, z, s); put(x + 1, y, z, s); put(x, y + 1, z, s);
+            x = Math.max(0, Math.min(NX - 1, x + (Math.random() - 0.5) * 2.4));
+            y = Math.max(0, Math.min(NY - 1, y + (Math.random() - 0.5) * 2.4));
+            z = Math.max(0, Math.min(NZ - 1, z + (Math.random() - 0.5) * 2.4));
+          }
+        }
+      } else if (kind === 'symmetric') {
+        // Random points in one octant, mirrored to all eight -> mandala growth.
+        // Mirrors keep the same species so the symmetry survives inhibition.
+        const count = Math.floor(N * 0.006) + 20;
+        for (let i = 0; i < count; i++) {
+          const px = Math.floor(Math.random() * (NX / 2));
+          const py = Math.floor(Math.random() * (NY / 2));
+          const pz = Math.floor(Math.random() * (NZ / 2));
+          const s = Math.floor(Math.random() * S);
+          for (let mx = 0; mx < 2; mx++) for (let my = 0; my < 2; my++) for (let mz = 0; mz < 2; mz++) {
+            put(mx ? NX - 1 - px : px, my ? NY - 1 - py : py, mz ? NZ - 1 - pz : pz, s);
+          }
+        }
+      } else { // random
+        for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+          if (Math.random() < 0.12) put(x, y, z, Math.floor(Math.random() * S));
+        }
+      }
+      if (backend === 'gpu' && gpu.ok) gpuReset();
+    }
+
+    // ---- WebGPU backend -------------------------------------------------
+    // The compute shader below is a port of step(): same terms, same order, same
+    // boundary handling. The CPU array stays the source of truth -- every GPU
+    // generation is read back into `grid` -- so the renderers, stats, painting,
+    // JSON panel and self-test all keep working without knowing which backend ran.
+    // Trajectories will drift slightly from the CPU path: WGSL is f32 throughout
+    // while JS computes in f64 and rounds on store, and the rule is chaotic.
+    let backend = 'cpu';
+    let gpuDirty = false;                       // CPU painted since the last upload
+    const gpu = { ok:false, device:null, queue:null, pipe:null, uni:null,
+                  bufs:null, staging:null, groups:null, phase:0, bytes:0 };
+
+    // [grid, echo, next] buffer indices. The CPU rotation has period 4, so four
+    // bind groups cover every state and none is rebuilt per frame.
+    const PHASES = [[0,2,3],[3,1,2],[2,0,1],[1,3,0]];
+
+    const WGSL = `
+struct P {
+  nx:u32, ny:u32, nz:u32, numSpecies:u32,
+  boundary:u32, pad0:u32, pad1:u32, pad2:u32,
+  baseDecay:f32, echoWeight:f32, diffXY:f32, diffZ:f32,
+  resBoost:f32, spin:f32, birthTh:f32, activeTh:f32,
+  minEnergy:f32, inhibit:f32, pad3:f32, pad4:f32,
+};
+@group(0) @binding(0) var<storage, read>       G  : array<f32>;
+@group(0) @binding(1) var<storage, read>       EC : array<f32>;
+@group(0) @binding(2) var<storage, read_write> NX : array<f32>;
+@group(0) @binding(3) var<uniform>             p  : P;
+
+// Resolve one axis; -1 means outside an absorbing boundary.
+fn res(v:i32, n:u32) -> i32 {
+  let m = i32(n);
+  if (v >= 0 && v < m) { return v; }
+  if (p.boundary == 0u) { return ((v % m) + m) % m; }          // wrap
+  if (p.boundary == 1u) { if (v < 0) { return 0; } return m - 1; }  // reflect
+  return -1;                                                    // absorb
+}
+fn cell(base:u32, xi:i32, yi:i32, zi:i32) -> f32 {
+  if (xi < 0 || yi < 0 || zi < 0) { return 0.0; }
+  return G[base + (u32(zi) * p.ny + u32(yi)) * p.nx + u32(xi)];
+}
+
+@compute @workgroup_size(4,4,4)
+fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (gid.x >= p.nx || gid.y >= p.ny || gid.z >= p.nz) { return; }
+  let x = i32(gid.x); let y = i32(gid.y); let z = i32(gid.z);
+  let i = (gid.z * p.ny + gid.y) * p.nx + gid.x;
+  let N = p.nx * p.ny * p.nz;
+
+  let xm = res(x-1, p.nx); let xp = res(x+1, p.nx);
+  let ym = res(y-1, p.ny); let yp = res(y+1, p.ny);
+  let zm = res(z-1, p.nz); let zp = res(z+1, p.nz);
+
+  for (var s:u32 = 0u; s < p.numSpecies; s = s + 1u) {
+    let base = s * N;
+    let E  = G[base + i];
+    let Ee = EC[base + i];
+
+    var total = 0.0;
+    var nAct = 0.0;
+    for (var dz = -1; dz <= 1; dz = dz + 1) {
+      let zz = res(z+dz, p.nz);
+      for (var dy = -1; dy <= 1; dy = dy + 1) {
+        let yy = res(y+dy, p.ny);
+        for (var dx = -1; dx <= 1; dx = dx + 1) {
+          if (dx == 0 && dy == 0 && dz == 0) { continue; }
+          let e = cell(base, res(x+dx, p.nx), yy, zz);
+          total = total + e;
+          if (e > p.activeTh) { nAct = nAct + 1.0; }
+        }
       }
     }
 
+    var val = ((E + Ee * p.echoWeight) / (1.0 + p.echoWeight)) * p.baseDecay;
+
+    let avgN = total / 26.0;
+    let vxm = cell(base, xm, y, z); let vxp = cell(base, xp, y, z);
+    let vym = cell(base, x, ym, z); let vyp = cell(base, x, yp, z);
+    let vzm = cell(base, x, y, zm); let vzp = cell(base, x, y, zp);
+    let nXY = (vxm + vxp + vym + vyp) / 4.0;
+    let nZ  = (vzm + vzp) / 2.0;
+    val = val + (nXY - E) * p.diffXY + (nZ - E) * p.diffZ;
+
+    var spinDir = -1.0;
+    if (((gid.x + gid.y + gid.z) & 1u) == 1u) { spinDir = 1.0; }
+    val = val + p.spin * spinDir * ((nXY - vxm) - (nXY - vym));
+
+    var rival = 0.0;
+    if (p.numSpecies > 1u) {
+      for (var t:u32 = 0u; t < p.numSpecies; t = t + 1u) {
+        if (t == s) { continue; }
+        let tb = t * N;
+        let faces = (cell(tb,xm,y,z) + cell(tb,xp,y,z) +
+                     cell(tb,x,ym,z) + cell(tb,x,yp,z) +
+                     cell(tb,x,y,zm) + cell(tb,x,y,zp)) / 6.0;
+        rival = rival + G[tb + i] * 0.5 + faces * 0.5;
+      }
+      val = val - p.inhibit * rival;
+    }
+
+    var birth = 0.0;
+    let sig = total - floor(total / 120.0) * 120.0;
+    if (E <= p.minEnergy) {
+      if (rival < p.activeTh &&
+          ((nAct >= 3.0 && nAct <= 6.0 && sig > 50.0 && sig < 66.0) ||
+           (nAct >= 10.0 && nAct <= 12.0 && sig > 95.0 && sig < 108.0))) {
+        birth = p.birthTh + (sig - floor(sig / 20.0) * 20.0);
+      }
+    } else {
+      if (nAct == 4.0 || nAct == 5.0 || nAct == 7.0) { val = val + (avgN - E) * 0.15; }
+    }
+
+    if (abs(E - vzm) < 14.0 && abs(E - vzp) < 14.0 && E > 30.0) { val = val * p.resBoost; }
+    if (birth > 0.0) { val = max(val, birth); }
+    val = clamp(val, 0.0, 255.0);
+    if (val <= p.minEnergy) { val = 0.0; }
+    NX[base + i] = val;
+  }
+}`;
+
+    const uniData = new ArrayBuffer(80);
+    const uniU32 = new Uint32Array(uniData, 0, 5);
+    const uniF32 = new Float32Array(uniData, 32, 10);
+
+    async function initGPU() {
+      if (!navigator.gpu) return false;
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) return false;
+        const device = await adapter.requestDevice();
+        const module = device.createShaderModule({ code: WGSL });
+        const info = await module.getCompilationInfo();
+        const errs = info.messages.filter(m => m.type === 'error');
+        if (errs.length) {
+          console.error('WGSL:', errs.map(m => `${m.lineNum}: ${m.message}`).join('\n'));
+          return false;
+        }
+        gpu.device = device;
+        gpu.queue = device.queue;
+        gpu.pipe = device.createComputePipeline({
+          layout: 'auto', compute: { module, entryPoint: 'main' } });
+        gpu.uni = device.createBuffer({ size: 80,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        device.lost.then(() => { gpu.ok = false; setBackend('cpu'); });
+        gpu.ok = true;
+        return true;
+      } catch (e) {
+        console.warn('WebGPU unavailable:', e.message);
+        return false;
+      }
+    }
+
+    function gpuAllocate() {
+      if (!gpu.ok) return;
+      if (gpu.bufs) for (const b of gpu.bufs) b.destroy();
+      if (gpu.staging) gpu.staging.destroy();
+      gpu.bytes = numSpecies * N * 4;
+      gpu.bufs = [0,1,2,3].map(() => gpu.device.createBuffer({ size: gpu.bytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC }));
+      gpu.staging = gpu.device.createBuffer({ size: gpu.bytes,
+        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+      gpu.groups = PHASES.map(([g, e, n]) => gpu.device.createBindGroup({
+        layout: gpu.pipe.getBindGroupLayout(0),
+        entries: [ { binding:0, resource:{ buffer: gpu.bufs[g] } },
+                   { binding:1, resource:{ buffer: gpu.bufs[e] } },
+                   { binding:2, resource:{ buffer: gpu.bufs[n] } },
+                   { binding:3, resource:{ buffer: gpu.uni } } ] }));
+      gpuReset();
+    }
+
+    // Full restart: push the CPU lattice and clear the temporal history.
+    function gpuReset() {
+      if (!gpu.ok || !gpu.bufs) return;
+      gpu.phase = 0;
+      const zeros = new Float32Array(numSpecies * N);
+      gpu.queue.writeBuffer(gpu.bufs[PHASES[0][1]], 0, zeros);   // echo
+      gpu.queue.writeBuffer(gpu.bufs[1], 0, zeros);              // prev
+      gpu.queue.writeBuffer(gpu.bufs[PHASES[0][0]], 0, grid);
+      gpuDirty = false;
+    }
+
+    // Push just the current lattice, keeping echo/prev intact (used after painting).
+    function gpuPushGrid() {
+      if (!gpu.ok || !gpu.bufs) return;
+      gpu.queue.writeBuffer(gpu.bufs[PHASES[gpu.phase][0]], 0, grid);
+      gpuDirty = false;
+    }
+
+    function gpuUniforms() {
+      uniU32.set([NX, NY, NZ, numSpecies,
+        boundary === 'wrap' ? 0 : boundary === 'reflect' ? 1 : 2]);
+      uniF32.set([params.baseDecay, params.echoWeight, params.diffXY, params.diffZ,
+        params.resBoost, params.spin, params.birthTh, params.activeTh,
+        params.minEnergy, params.inhibit]);
+      gpu.queue.writeBuffer(gpu.uni, 0, uniData);
+    }
+
+    async function gpuStep() {
+      if (gpuDirty) gpuPushGrid();
+      gpuUniforms();                       // sliders can move between generations
+      const enc = gpu.device.createCommandEncoder();
+      const pass = enc.beginComputePass();
+      pass.setPipeline(gpu.pipe);
+      pass.setBindGroup(0, gpu.groups[gpu.phase]);
+      pass.dispatchWorkgroups(Math.ceil(NX/4), Math.ceil(NY/4), Math.ceil(NZ/4));
+      pass.end();
+      gpu.phase = (gpu.phase + 1) & 3;     // the buffer just written is the new grid
+      enc.copyBufferToBuffer(gpu.bufs[PHASES[gpu.phase][0]], 0, gpu.staging, 0, gpu.bytes);
+      gpu.queue.submit([enc.finish()]);
+      await gpu.staging.mapAsync(GPUMapMode.READ, 0, gpu.bytes);
+      grid.set(new Float32Array(gpu.staging.getMappedRange(0, gpu.bytes)));
+      gpu.staging.unmap();
+      generation++;
+    }
+
+    function setBackend(b) {
+      if (b === 'gpu' && !gpu.ok) return;
+      backend = b;
+      if (b === 'gpu') gpuAllocate();
+      for (const el of document.querySelectorAll('#backendSeg button')) {
+        el.setAttribute('aria-pressed', String(el.dataset.backend === backend));
+      }
+      document.getElementById('roBackend').textContent = backend.toUpperCase();
+      genMs = 0;                            // old timing describes the other backend
+    }
+
+    for (const b of document.querySelectorAll('#backendSeg button')) {
+      b.addEventListener('click', () => { setBackend(b.dataset.backend); draw(); });
+    }
+
+    // Does the GPU port agree with the CPU rule? Runs with ?selftest=1 once a
+    // device exists; appended to the synchronous self-test results.
+    async function gpuSelfTest() {
+      const saved = { NX, NY, NZ, numSpecies, boundary, backend };
+      let verdict;
+      try {
+        NX = NY = NZ = 16; numSpecies = 2; boundary = 'wrap';
+        backend = 'cpu';
+        allocFields();
+        for (let i = 0; i < grid.length; i++) {
+          grid[i] = Math.random() < 0.3 ? 40 + Math.random() * 215 : 0;
+        }
+        const start = Float32Array.from(grid);
+
+        step();                                   // CPU reference
+        const cpuOut = Float32Array.from(grid);
+
+        grid.set(start);                          // same input, GPU path
+        prev.fill(0); echo.fill(0);
+        backend = 'gpu';
+        gpuAllocate();
+        await gpuStep();
+
+        let maxDiff = 0, live = 0;
+        for (let i = 0; i < cpuOut.length; i++) {
+          maxDiff = Math.max(maxDiff, Math.abs(cpuOut[i] - grid[i]));
+          if (cpuOut[i] > 0) live++;
+        }
+        verdict = (maxDiff < 0.05 && live > 0)
+          ? `PASS gpu matches cpu (max diff ${maxDiff.toExponential(1)} over ${live} live cells)`
+          : `FAIL gpu differs from cpu (max diff ${maxDiff}, live ${live})`;
+      } catch (e) {
+        verdict = 'FAIL gpu self-test threw: ' + e.message;
+      } finally {
+        NX = saved.NX; NY = saved.NY; NZ = saved.NZ;
+        numSpecies = saved.numSpecies; boundary = saved.boundary;
+        backend = saved.backend;
+        allocFields(); seed(seedKind); syncSliceUI(); syncSizeUI(); draw();
+      }
+      console.log(verdict);
+      const el = document.getElementById('settingsError');
+      if (verdict.startsWith('FAIL')) el.style.color = '#ff8f8f';
+      el.textContent += ' · ' + verdict;
+    }
+
     // Init
-    randomFill(0.12);
+    allocFields();
+    seed(seedKind);
     syncParamUI();
+    syncSliceUI();
+    syncSpeciesUI();
+    syncSizeUI();
+    setRenderMode(renderMode);
+    setTransparentBand(transparentBand);
+    refreshFills();
     refreshSettingsText();
     draw();
 
@@ -843,7 +1690,7 @@
       glPosBuf = gl.createBuffer();
       glColBuf = gl.createBuffer();
       gl.enable(gl.DEPTH_TEST);
-      gl.clearColor(0.04, 0.06, 0.08, 1);
+      gl.clearColor(0.039, 0.043, 0.051, 1);   // --void, so the canvas edge disappears
     }
 
     function setupGLInteractions() {
@@ -917,10 +1764,10 @@
       for (let z = 0; z < NZ; z++) {
         for (let y = 0; y < NY; y++) {
           for (let x = 0; x < NX; x++) {
-            const e = grid[z][y][x];
-            if (e <= 0 || isTransparent(e)) continue;
+            dominantAt(idx(x, y, z));
+            if (domE <= 0 || isTransparent(domE)) continue;
             positions.push((x - cx)*scale, (y - cy)*scale, (z - cz)*scale);
-            const col = cssToRGB(energyColor(e, z));
+            const col = cssToRGB(energyColor(domE, z, domS));
             colors.push(col[0]/255, col[1]/255, col[2]/255);
           }
         }
@@ -963,12 +1810,130 @@
       return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10)];
     }
 
-    // Update render mode change listener to toggle canvases (removed duplicate at bottom)
-    // (Second duplicate listener removed to avoid double registration)
-    document.getElementById('renderMode').addEventListener('change', (e) => {
-      renderMode = e.target.value;
-      if (renderMode === 'webgl3d') ensureWebGL();
+    // Self-check. Open the file with ?selftest=1 to run it; result lands under the
+    // JSON panel and in the console. Covers the things that fail silently:
+    // boundary tables, the zero-copy buffer rotation, and species isolation.
+    function selfTest() {
+      const results = [];
+      const ok = (name, cond) => {
+        results.push((cond ? 'PASS ' : 'FAIL ') + name);
+        if (!cond) console.error('FAIL', name);
+      };
+
+      const saved = { NX, NY, NZ, numSpecies, boundary, seedKind, sliceAxis,
+                      backend, params: { ...params } };
+      backend = 'cpu';                       // these checks drive step() directly
+      const restore = () => {
+        NX = saved.NX; NY = saved.NY; NZ = saved.NZ;
+        numSpecies = saved.numSpecies; boundary = saved.boundary;
+        seedKind = saved.seedKind; sliceAxis = saved.sliceAxis; params = saved.params;
+        backend = saved.backend;
+        allocFields(); seed(seedKind); syncSliceUI(); draw();
+      };
+
+      try {
+        NX = 6; NY = 5; NZ = 4; numSpecies = 1; boundary = 'wrap';
+        allocFields();
+
+        // 1. flat index is a bijection over the lattice
+        const seen = new Set();
+        for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) seen.add(idx(x, y, z));
+        ok('idx covers every cell exactly once', seen.size === N && Math.max(...seen) === N - 1);
+
+        // 2. boundary tables resolve the off-lattice slots correctly
+        ok('wrap: -1 -> L-1', BX[0] === NX - 1 && BX[NX + 1] === 0);
+        boundary = 'reflect'; buildBoundaryTables();
+        ok('reflect: -1 -> 0', BX[0] === 0 && BX[NX + 1] === NX - 1);
+        boundary = 'absorb'; buildBoundaryTables();
+        ok('absorb: outside marked -1', BX[0] === -1 && BX[NX + 1] === -1);
+
+        // 3. a full lattice: a corner cell sees 26 neighbours wrapped, 7 absorbed
+        const cornerActive = () => { computeRowBases(0, 0); gather(0, 0, BX[0], BX[2]); return nbActive; };
+        boundary = 'wrap'; buildBoundaryTables(); clearAll();
+        grid.fill(200);
+        const wrapActive = cornerActive();
+        boundary = 'absorb'; buildBoundaryTables();
+        ok('absorb corner loses neighbours', wrapActive === 26 && cornerActive() === 7);
+
+        // 4. buffer rotation: echo is t-2, prev is t-1, no buffer aliases another
+        boundary = 'wrap'; buildBoundaryTables(); clearAll();
+        for (let i = 0; i < N; i++) grid[i] = (i % 7) * 20;
+        const t0 = Float32Array.from(grid);
+        step();
+        const t1 = Float32Array.from(grid);
+        step();
+        ok('echo holds t-2', echo.every((v, i) => v === t0[i]));
+        ok('prev holds t-1', prev.every((v, i) => v === t1[i]));
+        ok('four distinct buffers', new Set([grid.buffer, prev.buffer, echo.buffer, next.buffer]).size === 4);
+
+        // 5. species planes do not bleed into each other
+        numSpecies = 2; allocFields(); clearAll();
+        params.inhibit = 0;
+        for (let i = 0; i < N; i++) grid[N + i] = 180;   // species 2 only
+        step(); step();
+        let leaked = 0;
+        for (let i = 0; i < N; i++) if (grid[i] !== 0) leaked++;
+        ok('empty species stays empty', leaked === 0);
+
+        // 6. inhibition suppresses a species sharing space with a rival
+        const runBoth = (inh) => {
+          clearAll();
+          for (let i = 0; i < N; i++) { grid[i] = 150; grid[N + i] = 150; }
+          params.inhibit = inh;
+          step();
+          return grid[0];
+        };
+        ok('inhibition lowers energy under a rival', runBoth(1.0) < runBoth(0));
+
+        // 7. every seed kind puts something on the board
+        numSpecies = 2; allocFields();
+        for (const k of ['random', 'sphere', 'plane', 'filament', 'symmetric']) {
+          seed(k);
+          let n = 0;
+          for (let i = 0; i < grid.length; i++) if (grid[i] > 0) n++;
+          ok(`seed "${k}" produces live cells`, n > 0);
+        }
+
+        // 8. slice addressing stays in bounds on all three axes
+        let inBounds = true;
+        for (const ax of ['xy', 'xz', 'yz']) {
+          sliceAxis = ax;
+          const [uN, vN] = sliceUV();
+          for (let k = 0; k < sliceDepth(); k++)
+            for (let v = 0; v < vN; v++)
+              for (let u = 0; u < uN; u++) {
+                const ci = sliceIdx(u, v, k);
+                if (!(ci >= 0 && ci < N)) inBounds = false;
+              }
+        }
+        ok('slice addressing in bounds on all axes', inBounds);
+      } finally {
+        restore();
+      }
+
+      const failed = results.filter(r => r.startsWith('FAIL'));
+      console.log(results.join('\n'));
+      const el = document.getElementById('settingsError');
+      el.style.color = failed.length ? '#ff8f8f' : '#7ef0b0';
+      el.textContent = `selftest: ${results.length - failed.length}/${results.length} passed` +
+        (failed.length ? ' -- ' + failed.join('; ') : '');
+    }
+
+    if (location.search.includes('selftest')) selfTest();
+
+    // Probe for a device last: everything above already works without one.
+    initGPU().then(ok => {
+      const btn = document.querySelector('#backendSeg button[data-backend="gpu"]');
+      if (!ok) {
+        btn.title = navigator.gpu ? 'No WebGPU adapter on this machine'
+                                  : 'This browser has no WebGPU';
+        return;
+      }
+      btn.disabled = false;
+      btn.title = 'Run the rule as a compute shader';
+      setBackend('gpu');
       draw();
+      if (location.search.includes('selftest')) gpuSelfTest();
     });
   </script>
 </body>
